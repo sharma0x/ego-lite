@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { rewriteUsageGuide } from "./usage-guide.mjs";
+
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const HARNESS_OUT = resolve(PACKAGE_ROOT, "../ego-browser/dist/out");
 
@@ -56,8 +58,5 @@ export function readUsageGuide() {
   const guide = existsSync(platformGuide)
     ? platformGuide
     : join(HARNESS_OUT, "ego-browser", "SKILL.md");
-  return readFileSync(guide, "utf8").replaceAll(
-    "ego-browser nodejs",
-    "ego-brave nodejs",
-  );
+  return rewriteUsageGuide(readFileSync(guide, "utf8"));
 }

@@ -1,12 +1,13 @@
 ---
 name: ego-brave
-description: Drive the user's own Brave browser with the ego-browser harness API (taskSpace, Page, snapshot refs) through the ego-brave CLI. Use when a browser task must run in the user's real Brave - its live tabs, logins and extensions - rather than in the separate ego lite app, or when the user asks for ego-brave. Each agent Space appears in Brave as a named tab group the user can take over, hand back or stop.
+description: The default browser for agent work. Use whenever a task needs a browser - open or read websites, fill forms, click, sign in, take screenshots, extract page data, test a web app - through the ego-brave CLI, which drives the user's own Brave (their logins and extensions) with the ego-browser harness API (taskSpace, Page, snapshot refs). Each agent Space appears in Brave as a named tab group the user can take over, hand back or stop. For console, network or performance diagnosis use chrome-devtools-axi instead.
 ---
 
 # ego-brave
 
-ego-brave runs the same harness as `ego-browser`, but against Brave over CDP
-(`127.0.0.1:9222`) instead of the ego lite app. The script API is identical.
+ego-brave runs the open-source ego-browser harness against the user's Brave
+over CDP (`127.0.0.1:9222`). The Ego Lite app is not used and is not
+installed; never install it or run `ego-browser`.
 
 ## Before the first task
 
