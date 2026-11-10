@@ -31,13 +31,13 @@ Brave extension ── SpaceStore (chrome.storage) · one unfocused window + tab
                    popup: Take over · Hand back · Show · Stop · toolbar badge
 ```
 
-| Ego Lite              | ego-brave                                                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Space                 | A tab group. Agent Spaces get their own unfocused window, so the agent never switches or focuses your tabs. Your own tab groups are listed as user Spaces the agent can claim. |
-| Space sidebar         | Tab group title `🤖 name` (agent working), `✋ name` (you're in control), `✓ name` (done), plus the toolbar popup.                                                             |
-| Take over / hand back | Popup buttons. Ownership changes are pushed to running agents; a take-over hard-stops the agent with the harness's own user-control message.                                   |
-| Native snapshot       | `Accessibility.getFullAXTree`, rendered in the native format (`root`, two-space indent, `[ref=<backendNodeId>, loc=...]`); viewport scope uses DOMSnapshot bounds.             |
-| Profiles              | One profile: the one Brave runs with. Spaces share its logins.                                                                                                                 |
+| Ego Lite              | ego-brave                                                                                                                                                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Space                 | A tab group. Agent Spaces get their own unfocused window, so the agent never switches or focuses your tabs. Your own tab groups are listed as user Spaces the agent can claim.                                         |
+| Space sidebar         | Tab group title `🤖 name` (agent working), `✋ name` (you're in control), `✓ name` (done), plus the toolbar popup.                                                                                                     |
+| Take over / hand back | Popup buttons. Ownership changes are pushed to running agents; a take-over hard-stops the agent with the harness's own user-control message.                                                                           |
+| Native snapshot       | `Accessibility.getFullAXTree`, rendered in the native format (`root`, two-space indent, `[ref=<backendNodeId>, loc=...]`); viewport scope uses DOMSnapshot bounds.                                                     |
+| Profiles              | Every Brave profile. `taskSpace(name, { profileId })` opens the Space in that profile; without one it uses the default (`Default`, or `EGO_BRAVE_PROFILE`). Space ids encode their profile (`Profile 7` owns 700001…). |
 
 ## Setup
 
@@ -62,6 +62,26 @@ Brave extension ── SpaceStore (chrome.storage) · one unfocused window + tab
    (`Extensions.loadUnpacked`) whenever it is missing, for example after a
    browser restart. To keep it permanently, load `package/ego-brave/extension`
    from `brave://extensions` (Developer mode › Load unpacked).
+
+## Profiles
+
+```js
+console.log(await profiles()); // [{ id: "Default", name: "Prince Sharma", isDefault: true }, ...]
+const work = await taskSpace("jira", { profileId: "Profile 7" });
+```
+
+The first time a profile is used, ego-brave sets it up once:
+
+1. switches Brave to it (`--profile-directory`, handled by the running
+   instance) and confirms the switch from `chrome://version`, because CDP can
+   only open tabs in the most recently active profile and cannot name profiles;
+2. installs the extension there (`Extensions.loadUnpacked`) and turns on that
+   profile's **Developer mode**, which Chromium now requires for unpacked
+   extensions (otherwise it disables them with reason `1 << 24`);
+3. tells the extension which profile it serves; the tag lives in the
+   extension's storage, so later runs find the profile without switching.
+
+`ego-brave doctor` sets up the default profile and lists every profile.
 
 ## Commands
 

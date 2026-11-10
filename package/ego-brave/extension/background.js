@@ -12,6 +12,8 @@ const tabs = new SpaceTabs(registry, store);
 
 // The allowlist of operations reachable from the CLI bridge and the popup.
 const OPERATIONS = {
+  whoami: () => registry.whoami(),
+  setProfile: (args) => registry.setProfile(args),
   listSpaces: () => registry.list(),
   createSpace: (args) => registry.create(args),
   claimSpace: (args) => registry.claim(args),
@@ -49,14 +51,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // running ego-brave processes so Take over stops the agent immediately.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.egoBrave)
-    void publish(changes.egoBrave.newValue?.spaces ?? []);
+    void publish(changes.egoBrave.newValue ?? {});
 });
 
 chrome.tabGroups.onRemoved.addListener((group) => {
   void store.removeWhere((space) => space.groupId === group.id);
 });
 
-async function publish(spaces) {
+// idBase tells the CLI which id range this profile owns, so an update from
+// one profile only replaces that profile's cached ownership.
+async function publish({ spaces = [], profile }) {
   await Promise.all([renderBadge(spaces), ...spaces.map(decorateSpace)]);
   const summary = spaces.map(({ id, ownership, reason }) => ({
     id,
@@ -66,7 +70,7 @@ async function publish(spaces) {
   chrome.runtime
     .sendMessage({
       channel: EVENT_CHANNEL,
-      event: { type: "spaces", spaces: summary },
+      event: { type: "spaces", idBase: profile?.idBase ?? 0, spaces: summary },
     })
     .catch(() => {});
 }

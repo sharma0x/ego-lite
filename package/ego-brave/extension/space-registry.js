@@ -1,4 +1,3 @@
-const PROFILE = { profileId: "Default", profileName: "Brave" };
 const RECENT_TAB_TITLES = 5;
 const STATUS_PREFIX = /^(🤖|✋|✓)\s*/u;
 
@@ -36,8 +35,30 @@ export class SpaceRegistry {
 
   async list() {
     await this.#syncWithTabGroups();
-    const spaces = await this.#store.all();
-    return { taskSpaces: await Promise.all(spaces.map(describeForListing)) };
+    const [spaces, profile] = await Promise.all([
+      this.#store.all(),
+      this.#store.profile(),
+    ]);
+    const profileFields = profile
+      ? { profileId: profile.id, profileName: profile.name }
+      : {};
+    return {
+      taskSpaces: await Promise.all(
+        spaces.map((space) => describeForListing(space, profileFields)),
+      ),
+    };
+  }
+
+  /** Which browser profile this extension instance runs in, once assigned. */
+  whoami() {
+    return this.#store.profile();
+  }
+
+  async setProfile({ id, name, idBase }) {
+    if (typeof id !== "string" || !Number.isInteger(idBase)) {
+      throw new Error("setProfile needs a profile id and an integer idBase");
+    }
+    return this.#store.setProfile({ id, name, idBase });
   }
 
   async create({ name }) {
@@ -137,7 +158,7 @@ export class SpaceRegistry {
 
   /** Drop Spaces whose group is gone; list the user's other groups as user Spaces. */
   async #syncWithTabGroups() {
-    const groups = await chrome.tabGroups.query({});
+    const groups = await queryAllTabGroups();
     const liveIds = new Set(groups.map((group) => group.id));
     await this.#store.removeWhere((space) => !liveIds.has(space.groupId));
     const knownIds = new Set(
@@ -160,6 +181,13 @@ export class SpaceRegistry {
   }
 }
 
+// chrome.tabGroups.query rejects with "No current window" in a profile that
+// has no windows open; such a profile has no groups.
+async function queryAllTabGroups() {
+  const windows = await chrome.windows.getAll();
+  return windows.length > 0 ? chrome.tabGroups.query({}) : [];
+}
+
 // A Space restored after a browser restart comes back as a plain tab group
 // still titled "🤖 name"; list it under its own name.
 function groupTitleWithoutStatus(group) {
@@ -177,13 +205,13 @@ function descriptor(space) {
   };
 }
 
-async function describeForListing(space) {
+async function describeForListing(space, profileFields) {
   const tabs = await chrome.tabs.query({ groupId: space.groupId });
   const recentTabTitles = tabs
     .map((tab) => tab.title)
     .filter(Boolean)
     .slice(-RECENT_TAB_TITLES);
-  return { ...descriptor(space), ...PROFILE, recentTabTitles };
+  return { ...descriptor(space), ...profileFields, recentTabTitles };
 }
 
 async function closeGroup(space, group) {

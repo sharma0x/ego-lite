@@ -15,24 +15,17 @@ import {
 import { HarnessCdpBridge } from "./harness-cdp-bridge.mjs";
 import { SpaceControl } from "./space-control.mjs";
 
-// Brave has one profile from the adapter's point of view: the one it was
-// started with. Spaces share its cookies and logins.
-const BROWSER_PROFILE = Object.freeze({
-  id: "Default",
-  name: "Brave",
-  isDefault: true,
-});
-const DEFAULT_PROFILE_ALIASES = new Set(["", "default", BROWSER_PROFILE.id]);
-
 /**
  * Implements Ego Lite's `globalThis.ego` contract (docs/native-bindings-api.md)
  * on top of a CDP browser and the ego-brave extension. Facade over:
- *   - ExtensionRpc     Spaces, tabs, tab groups, ownership
- *   - SnapshotService  native-format page snapshots
- *   - HarnessCdpBridge the harness's raw CDP traffic
+ *   - rpc (ProfileRouter) Spaces, tabs, tab groups, ownership, per profile
+ *   - ProfileCatalog      the browser's profiles
+ *   - SnapshotService     native-format page snapshots
+ *   - HarnessCdpBridge    the harness's raw CDP traffic
  */
 export class BraveEgo {
   #rpc;
+  #profiles;
   #snapshots;
   #control;
   #cdp;
@@ -41,8 +34,9 @@ export class BraveEgo {
   /** The plain object installed as globalThis.ego. */
   bindings;
 
-  constructor({ harnessChannel, rpc, snapshots, browserVersion }) {
+  constructor({ harnessChannel, rpc, profiles, snapshots, browserVersion }) {
     this.#rpc = rpc;
+    this.#profiles = profiles;
     this.#snapshots = snapshots;
     this.#browserVersion = browserVersion;
     this.#control = new SpaceControl(rpc);
@@ -98,7 +92,7 @@ export class BraveEgo {
 
   async #listProfiles(args) {
     expectArity("listProfiles", args, 0);
-    return { profiles: [{ ...BROWSER_PROFILE }] };
+    return { profiles: this.#profiles.list() };
   }
 
   async #createTab(args) {
@@ -140,10 +134,11 @@ export class BraveEgo {
     const [name, profileId] = args;
     expectString("createTaskSpace", "name", name, { nonEmpty: true });
     expectOptionalString("createTaskSpace", "profileId", profileId);
-    if (profileId !== undefined && !DEFAULT_PROFILE_ALIASES.has(profileId)) {
+    const profile = this.#profiles.resolve(profileId);
+    if (!profile) {
       return errorResult(ErrorCode.PROFILE_NOT_FOUND, "Profile not found");
     }
-    return this.#rpc.call("createSpace", { name });
+    return this.#rpc.call("createSpace", { name, profileId: profile.id });
   }
 
   async #claimTaskSpace(args) {

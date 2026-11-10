@@ -42,6 +42,26 @@ Every rule in the guide applies: one TaskSpace per goal, reuse `p1` with
 `goto()`, resume the space by name in later rounds, refs come from the latest
 snapshot.
 
+## Profiles
+
+Spaces open in the default profile ("Prince Sharma", `Default`) unless the
+user names another. To use one, find its id and pass it when creating the
+Space; later rounds resume it by name as usual.
+
+```js
+console.log(await profiles()); // ids like "Default", "Profile 7"
+const task = await taskSpace("goal name", { profileId: "Profile 7" });
+```
+
+The first use of a profile switches Brave to it once (a window of that
+profile appears) and turns on its Developer mode so the ego-brave extension
+can run there. Each profile has its own logins, so pick the one the user
+signs in to for the task.
+
+Gmail and other apps that stream data may never fire `load`: when `goto()`
+times out with "navigation committed", continue on the Page instead of
+retrying.
+
 ## User control
 
 The user can click **Take over** in the "Agent Spaces" toolbar popup at any

@@ -1,4 +1,5 @@
 import { ErrorCode, errorResult, isErrorResult } from "../errors.mjs";
+import { SPACE_ID_SPAN } from "../profiles/profile-catalog.mjs";
 
 const DEFAULT_CONTROL_REASON = "manual_takeover";
 
@@ -15,7 +16,7 @@ export class SpaceControl {
   constructor(rpc) {
     this.#rpc = rpc;
     rpc.onEvent((event) => {
-      if (event.type === "spaces") this.#replaceStatuses(event.spaces);
+      if (event.type === "spaces") this.#replaceStatuses(event);
     });
   }
 
@@ -64,8 +65,13 @@ export class SpaceControl {
     return this.#statusById.get(spaceId);
   }
 
-  #replaceStatuses(spaces) {
-    this.#statusById.clear();
+  /** Each profile reports only its own id block; leave other profiles' entries alone. */
+  #replaceStatuses({ idBase = 0, spaces }) {
+    for (const spaceId of [...this.#statusById.keys()]) {
+      if (spaceId >= idBase && spaceId < idBase + SPACE_ID_SPAN) {
+        this.#statusById.delete(spaceId);
+      }
+    }
     for (const space of spaces) {
       this.#statusById.set(space.id, {
         ownership: space.ownership,

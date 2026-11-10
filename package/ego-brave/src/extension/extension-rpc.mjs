@@ -4,11 +4,11 @@ const BRIDGE_PATH = "/offscreen.html";
 const NOTIFY_BINDING = "egoBraveNotify";
 
 /**
- * Calls into the ego-brave extension. The extension keeps an offscreen
- * document alive as a stable CDP target; evaluating in it forwards the call to
- * the service worker, which owns Spaces, tabs and tab groups. State changes
- * come back through a Runtime binding, so ownership updates are pushed rather
- * than polled.
+ * Calls into one profile's ego-brave extension. The extension keeps an
+ * offscreen document alive as a stable CDP target; evaluating in it forwards
+ * the call to the service worker, which owns Spaces, tabs and tab groups.
+ * State changes come back through a Runtime binding, so ownership updates are
+ * pushed rather than polled.
  */
 export class ExtensionRpc {
   #client;
@@ -21,10 +21,8 @@ export class ExtensionRpc {
     client.onEvent((message) => this.#onCdpEvent(message));
   }
 
-  static async connect(client) {
-    const { targetInfos } = await client.call("Target.getTargets");
-    const bridge = targetInfos.find((target) => isBridgeUrl(target.url));
-    if (!bridge) throw bridgeMissing();
+  /** @param {{ targetId: string }} bridge a target from findBridges() */
+  static async connectTo(client, bridge) {
     const sessionId = await client.session(bridge.targetId);
     await client.call(
       "Runtime.addBinding",
@@ -68,6 +66,14 @@ export class ExtensionRpc {
   }
 }
 
+/** Every running extension bridge, one per browser profile that has it. */
+export async function findBridges(client) {
+  const { targetInfos } = await client.call("Target.getTargets");
+  return targetInfos
+    .filter((target) => isBridgeUrl(target.url))
+    .map(({ targetId, browserContextId }) => ({ targetId, browserContextId }));
+}
+
 function isBridgeUrl(url) {
   return url.startsWith("chrome-extension://") && url.endsWith(BRIDGE_PATH);
 }
@@ -76,8 +82,8 @@ export class BridgeMissingError extends Error {
   error_code = ErrorCode.BROWSER_UNAVAILABLE;
 }
 
-export function bridgeMissing() {
+export function bridgeMissing(detail = "") {
   return new BridgeMissingError(
-    "The ego-brave extension is not running. Load package/ego-brave/extension via brave://extensions (Developer mode > Load unpacked), then run `ego-brave doctor`.",
+    `The ego-brave extension is not running in this profile${detail}. Load package/ego-brave/extension via brave://extensions (Developer mode > Load unpacked), then run \`ego-brave doctor\`.`,
   );
 }
