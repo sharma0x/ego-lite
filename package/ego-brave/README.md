@@ -47,14 +47,21 @@ Brave extension ── SpaceStore (chrome.storage) · one unfocused window + tab
 
    ```bash
    osascript -e 'tell application "Brave Browser" to quit'; sleep 3
-   nohup "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" \
+   open -a "Brave Browser" --args \
      --remote-debugging-port=9222 \
      --disable-renderer-backgrounding \
      --disable-backgrounding-occluded-windows \
-     --disable-background-timer-throttling >/tmp/brave-debug.log 2>&1 &
-   # With several profiles, Brave opens its profile picker; open yours:
-   "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" --profile-directory=Default
+     --disable-background-timer-throttling \
+     --profile-directory=Default
    ```
+
+   Launch through `open -a`, never by running the binary from a shell
+   (`nohup …/Brave Browser &`). A binary started that way shows its windows
+   and takes clicks, but macOS never registers it as a foreground app, so it
+   gets no keyboard focus and typing goes to the previous app.
+   `--profile-directory` skips the profile picker that opens when there are
+   several profiles. If Apple Events cannot quit a mis-launched Brave, close it
+   over CDP with `Browser.close`.
 
 2. Build the harness once: `npm run build:harness`.
 
