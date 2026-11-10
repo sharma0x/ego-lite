@@ -5,6 +5,7 @@ import {
   readUsageGuide,
   runHarnessScript,
 } from "../src/cli/harness.mjs";
+import { runLaunch } from "../src/cli/launch.mjs";
 import { openSession } from "../src/cli/session.mjs";
 
 const USAGE = `Usage:
@@ -12,6 +13,8 @@ const USAGE = `Usage:
   ego-brave nodejs -e '<code>'
   ego-brave skill               print the usage guide
   ego-brave doctor              check Brave, the extension and the harness build
+  ego-brave launch [--restart]  start Brave with remote debugging the macOS way;
+                                --restart quits a Brave running without it first
 `;
 
 const [command, ...rest] = process.argv.slice(2);
@@ -24,6 +27,8 @@ async function dispatch(name, args) {
   if (name === "nodejs") return runScript(args);
   if (name === "skill") return printGuide();
   if (name === "doctor") return runDoctor();
+  if (name === "launch")
+    return runLaunch({ restart: args.includes("--restart") });
   process.stderr.write(USAGE);
   return name === "-h" || name === "--help" ? 0 : 2;
 }

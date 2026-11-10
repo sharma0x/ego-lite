@@ -82,6 +82,6 @@ async function resolveBrowserWebSocketUrl(endpoint) {
 function unreachable(endpoint) {
   return codedError(
     ErrorCode.BROWSER_UNAVAILABLE,
-    `No browser is listening for CDP at ${endpoint}. Start Brave with --remote-debugging-port=9222 (see ego-brave doctor).`,
+    `No browser is listening for CDP at ${endpoint}. Run \`ego-brave launch\`; if Brave is open without debugging, ask the user, then run \`ego-brave launch --restart\` (tabs are restored).`,
   );
 }

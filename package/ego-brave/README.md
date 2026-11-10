@@ -41,27 +41,23 @@ Brave extension ── SpaceStore (chrome.storage) · one unfocused window + tab
 
 ## Setup
 
-1. Start Brave with remote debugging and without background throttling. The
-   flags matter: without them, renderers in windows behind other apps stall
-   for seconds and CDP calls time out.
+1. Start Brave with remote debugging and without background throttling:
 
    ```bash
-   osascript -e 'tell application "Brave Browser" to quit'; sleep 3
-   open -a "Brave Browser" --args \
-     --remote-debugging-port=9222 \
-     --disable-renderer-backgrounding \
-     --disable-backgrounding-occluded-windows \
-     --disable-background-timer-throttling \
-     --profile-directory=Default
+   ego-brave launch            # starts Brave correctly, or confirms it already is
+   ego-brave launch --restart  # Brave is open without debugging: quit and reopen it
    ```
 
-   Launch through `open -a`, never by running the binary from a shell
-   (`nohup …/Brave Browser &`). A binary started that way shows its windows
-   and takes clicks, but macOS never registers it as a foreground app, so it
-   gets no keyboard focus and typing goes to the previous app.
-   `--profile-directory` skips the profile picker that opens when there are
-   several profiles. If Apple Events cannot quit a mis-launched Brave, close it
-   over CDP with `Browser.close`.
+   It launches through LaunchServices (`open -a`) with
+   `--remote-debugging-port=9222`, the three `--disable-*` throttling flags
+   (without them, renderers behind other apps stall and CDP calls time out)
+   and `--profile-directory=Default`. Never run the Brave binary from a shell:
+   macOS then never registers it as an app, so it gets no keyboard focus, no
+   Dock entry and no Quit menu.
+
+   To have this happen at every login, load a LaunchAgent that runs
+   `ego-brave launch` once (`RunAtLoad`); it never restarts a Brave the user
+   already opened. See `~/Library/LaunchAgents/com.sharma0x.ego-brave.launch.plist`.
 
 2. Build the harness once: `npm run build:harness`.
 
@@ -92,11 +88,12 @@ The first time a profile is used, ego-brave sets it up once:
 
 ## Commands
 
-| Command                                          | Does                                                                  |
-| ------------------------------------------------ | --------------------------------------------------------------------- |
-| `ego-brave nodejs <<'EOF' … EOF` / `-e '<code>'` | Run a browser script with the harness API                             |
-| `ego-brave skill`                                | Print the harness usage guide, with commands rewritten to `ego-brave` |
-| `ego-brave doctor`                               | Check the harness build, CDP and the extension bridge                 |
+| Command                                          | Does                                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `ego-brave nodejs <<'EOF' … EOF` / `-e '<code>'` | Run a browser script with the harness API                                         |
+| `ego-brave skill`                                | Print the harness usage guide, with commands rewritten to `ego-brave`             |
+| `ego-brave doctor`                               | Check the harness build, CDP and the extension bridge; set up the default profile |
+| `ego-brave launch [--restart]`                   | Start Brave with remote debugging the macOS way                                   |
 
 Environment: `EGO_BRAVE_CDP_URL` (default `http://127.0.0.1:9222`),
 `EGO_BRAVE_SDK_PATH` (harness bundle), `EGO_BRAVE_TRACE=1` (log every CDP
