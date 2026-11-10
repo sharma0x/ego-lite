@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "ego-brave Spaces",
+  "version": "0.1.0",
+  "description": "Agent Spaces for ego-brave: each Space is a named tab group you can watch, take over, hand back or stop.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabs", "tabGroups", "storage", "offscreen", "debugger"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Agent Spaces",
+    "default_popup": "popup.html"
+  }
+}
