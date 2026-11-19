@@ -58,6 +58,13 @@ chrome.tabGroups.onRemoved.addListener((group) => {
   void store.removeWhere((space) => space.groupId === group.id);
 });
 
+// Window Spaces (browsers without working tab groups) end with their window.
+chrome.windows.onRemoved.addListener((windowId) => {
+  void store.removeWhere(
+    (space) => space.groupId == null && space.windowId === windowId,
+  );
+});
+
 // idBase tells the CLI which id range this profile owns, so an update from
 // one profile only replaces that profile's cached ownership.
 async function publish({ spaces = [], profile }) {

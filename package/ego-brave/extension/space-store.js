@@ -6,7 +6,8 @@ const STORAGE_KEY = "egoBrave";
  * agent calls cannot lose each other's read-modify-write.
  *
  * Space fields: id, name, createdBy ('agent'|'user'), ownership ('agent'|'user'),
- * reason, status ('active'|'completed'), state, groupId, ownsWindow, managed,
+ * reason, status ('active'|'completed'), state, groupId (tab group) or
+ * windowId (window Space, see space-container.js), ownsWindow, managed,
  * activeTargetId.
  *
  * The extension runs once per browser profile. `profile` ({ id, name, idBase })

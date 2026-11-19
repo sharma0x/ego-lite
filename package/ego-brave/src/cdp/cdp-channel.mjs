@@ -1,6 +1,6 @@
 import { ErrorCode, codedError } from "../errors.mjs";
 
-const DEFAULT_ENDPOINT = "http://127.0.0.1:9222";
+import { BROWSER, CDP_ENDPOINT } from "../cli/browser.mjs";
 
 /**
  * One browser-level CDP WebSocket. It forwards raw JSON both ways and knows
@@ -22,9 +22,7 @@ export class CdpChannel {
     );
   }
 
-  static async connect(
-    endpoint = process.env.EGO_BRAVE_CDP_URL || DEFAULT_ENDPOINT,
-  ) {
+  static async connect(endpoint = CDP_ENDPOINT) {
     const webSocketUrl = await resolveBrowserWebSocketUrl(endpoint);
     const socket = new WebSocket(webSocketUrl);
     await new Promise((resolve, reject) => {
@@ -82,6 +80,6 @@ async function resolveBrowserWebSocketUrl(endpoint) {
 function unreachable(endpoint) {
   return codedError(
     ErrorCode.BROWSER_UNAVAILABLE,
-    `No browser is listening for CDP at ${endpoint}. Run \`ego-brave launch\`; if Brave is open without debugging, ask the user, then run \`ego-brave launch --restart\` (tabs are restored).`,
+    `No browser is listening for CDP at ${endpoint}. Run \`${BROWSER.command} launch\`; if ${BROWSER.app} is open without debugging, ask the user, then run \`${BROWSER.command} launch --restart\` (tabs are restored).`,
   );
 }

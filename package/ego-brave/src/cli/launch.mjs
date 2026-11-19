@@ -3,11 +3,12 @@ import { promisify } from "node:util";
 
 import { CdpChannel } from "../cdp/cdp-channel.mjs";
 import { CdpClient } from "../cdp/cdp-client.mjs";
+import { BROWSER } from "./browser.mjs";
 
 const run = promisify(execFile);
 
-const APP_NAME = process.env.EGO_BRAVE_APP || "Brave Browser";
-const DEBUGGING_PORT = 9222;
+const APP_NAME = BROWSER.app;
+const DEBUGGING_PORT = BROWSER.port;
 // Without the three --disable-* flags, renderers in windows behind other apps
 // are throttled and CDP calls stall for seconds or time out.
 const LAUNCH_FLAGS = [
@@ -15,13 +16,17 @@ const LAUNCH_FLAGS = [
   "--disable-renderer-backgrounding",
   "--disable-backgrounding-occluded-windows",
   "--disable-background-timer-throttling",
+  ...BROWSER.extraFlags,
 ];
+// A browser on its own user data dir runs as a second instance beside the
+// user's everyday one: open a new instance (-n) and find it by that dir.
+const OPEN_ARGS = BROWSER.customUserDataDir ? ["-n", "-a"] : ["-a"];
 const QUIT_TIMEOUT_MS = 20_000;
 const START_TIMEOUT_MS = 30_000;
 const POLL_MS = 500;
 
 /**
- * Makes sure Brave runs with remote debugging, started through LaunchServices
+ * Makes sure the browser (Brave, or Opera for ego-opera) runs with remote debugging, started through LaunchServices
  * (`open -a`). Starting the binary directly leaves it unregistered with macOS:
  * no keyboard focus, no Dock entry and no Quit menu.
  *
@@ -51,7 +56,7 @@ export async function runLaunch({
     await quit();
   }
   await run("open", [
-    "-a",
+    ...OPEN_ARGS,
     APP_NAME,
     "--args",
     ...LAUNCH_FLAGS,
@@ -71,7 +76,7 @@ export async function runLaunch({
 export function launchCommand() {
   return [
     "open",
-    "-a",
+    ...OPEN_ARGS,
     JSON.stringify(APP_NAME),
     "--args",
     ...LAUNCH_FLAGS,
@@ -80,10 +85,15 @@ export function launchCommand() {
 }
 
 async function quit() {
-  await run("osascript", [
-    "-e",
-    `tell application ${JSON.stringify(APP_NAME)} to quit`,
-  ]).catch(() => {});
+  if (BROWSER.customUserDataDir)
+    await run("pkill", ["-f", `--user-data-dir=${BROWSER.userDataDir}`]).catch(
+      () => {},
+    );
+  else
+    await run("osascript", [
+      "-e",
+      `tell application ${JSON.stringify(APP_NAME)} to quit`,
+    ]).catch(() => {});
   await waitFor(
     async () => !(await isRunning()),
     QUIT_TIMEOUT_MS,
@@ -111,7 +121,12 @@ async function debuggingReady() {
 
 async function isRunning() {
   try {
-    await run("pgrep", ["-x", APP_NAME]);
+    await run(
+      "pgrep",
+      BROWSER.customUserDataDir
+        ? ["-f", `--user-data-dir=${BROWSER.userDataDir}`]
+        : ["-x", APP_NAME],
+    );
     return true;
   } catch {
     return false;

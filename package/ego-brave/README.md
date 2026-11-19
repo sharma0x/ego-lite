@@ -15,6 +15,22 @@ console.log(await page.snapshot());
 EOF
 ```
 
+## Opera
+
+`ego-opera` is the same CLI and API driving Opera:
+
+```bash
+export EGO_OPERA_USER_DATA_DIR=~/opera-agent   # optional: its own profile, beside your everyday Opera
+ego-opera launch     # starts Opera on port 9333 with the extension loaded (--load-extension)
+ego-opera doctor
+ego-opera nodejs -e 'const task = await taskSpace("research"); ...'
+```
+
+Opera accepts `chrome.tabs.group()` but keeps no tab groups, so there each
+Space is its own window instead of a group (`extension/space-container.js`).
+Everything else - ownership, hand-off, Take over, `finish()` - behaves the
+same. Useful for Opera's built-in browser VPN.
+
 ## How it works
 
 The harness reaches the browser only through `globalThis.ego`, the native

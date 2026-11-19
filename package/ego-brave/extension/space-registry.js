@@ -1,3 +1,11 @@
+import {
+  closeContainer,
+  createContainer,
+  isWindowSpace,
+  liveContainer,
+  tabsOf,
+} from "./space-container.js";
+
 const RECENT_TAB_TITLES = 5;
 const STATUS_PREFIX = /^(🤖|✋|✓)\s*/u;
 
@@ -6,7 +14,8 @@ export function errorResult(errorCode, message) {
 }
 
 /**
- * Space lifecycle and ownership. A Space is a tab group: agent-created Spaces
+ * Space lifecycle and ownership. A Space is a tab group (or, in browsers
+ * without working tab groups, its own window; see space-container.js): agent-created Spaces
  * get their own unfocused window so the agent never switches the user's tabs;
  * a user's own tab groups are listed as user-owned Spaces they can let the
  * agent claim.
@@ -18,12 +27,10 @@ export class SpaceRegistry {
     this.#store = store;
   }
 
-  /** @returns {{space, group}} or an EGO_TASK_SPACE_NOT_FOUND result. */
+  /** @returns {{space, group}} or an EGO_TASK_SPACE_NOT_FOUND result; `group` is the live container ({ windowId }). */
   async resolve(spaceId) {
     const space = await this.#store.get(spaceId);
-    const group =
-      space &&
-      (await chrome.tabGroups.get(space.groupId).catch(() => undefined));
+    const group = space && (await liveContainer(space));
     if (group) return { space, group };
     if (space)
       await this.#store.removeWhere((candidate) => candidate.id === spaceId);
@@ -66,17 +73,14 @@ export class SpaceRegistry {
       url: "about:blank",
       focused: false,
     });
-    const groupId = await chrome.tabs.group({
-      tabIds: [window.tabs[0].id],
-      createProperties: { windowId: window.id },
-    });
+    const container = await createContainer(window);
     const space = await this.#store.add({
       name,
       createdBy: "agent",
       ownership: "agent",
       status: "active",
       state: "",
-      groupId,
+      ...container,
       ownsWindow: true,
       managed: true,
     });
@@ -109,7 +113,7 @@ export class SpaceRegistry {
   async close({ spaceId }) {
     const resolved = await this.resolve(spaceId);
     if (resolved.error_code) return resolved;
-    await closeGroup(resolved.space, resolved.group);
+    await closeContainer(resolved.space, resolved.group);
     await this.#store.removeWhere((space) => space.id === spaceId);
     return `${spaceId} task space closed.`;
   }
@@ -156,11 +160,18 @@ export class SpaceRegistry {
     return `${spaceId} ${message}`;
   }
 
-  /** Drop Spaces whose group is gone; list the user's other groups as user Spaces. */
+  /** Drop Spaces whose group or window is gone; list the user's other groups as user Spaces. */
   async #syncWithTabGroups() {
     const groups = await queryAllTabGroups();
     const liveIds = new Set(groups.map((group) => group.id));
-    await this.#store.removeWhere((space) => !liveIds.has(space.groupId));
+    const liveWindows = new Set(
+      (await chrome.windows.getAll()).map((window) => window.id),
+    );
+    await this.#store.removeWhere((space) =>
+      isWindowSpace(space)
+        ? !liveWindows.has(space.windowId)
+        : !liveIds.has(space.groupId),
+    );
     const knownIds = new Set(
       (await this.#store.all()).map((space) => space.groupId),
     );
@@ -185,7 +196,7 @@ export class SpaceRegistry {
 // has no windows open; such a profile has no groups.
 async function queryAllTabGroups() {
   const windows = await chrome.windows.getAll();
-  return windows.length > 0 ? chrome.tabGroups.query({}) : [];
+  return windows.length > 0 ? chrome.tabGroups.query({}).catch(() => []) : [];
 }
 
 // A Space restored after a browser restart comes back as a plain tab group
@@ -206,19 +217,10 @@ function descriptor(space) {
 }
 
 async function describeForListing(space, profileFields) {
-  const tabs = await chrome.tabs.query({ groupId: space.groupId });
+  const tabs = await tabsOf(space);
   const recentTabTitles = tabs
     .map((tab) => tab.title)
     .filter(Boolean)
     .slice(-RECENT_TAB_TITLES);
   return { ...descriptor(space), ...profileFields, recentTabTitles };
-}
-
-async function closeGroup(space, group) {
-  if (space.ownsWindow) {
-    await chrome.windows.remove(group.windowId);
-    return;
-  }
-  const tabs = await chrome.tabs.query({ groupId: space.groupId });
-  await chrome.tabs.remove(tabs.map((tab) => tab.id));
 }

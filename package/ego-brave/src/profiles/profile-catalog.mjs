@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+
+import { BROWSER } from "../cli/browser.mjs";
 
 /**
  * Each profile owns a block of Space ids: "Default" 1..99999, "Profile N"
@@ -12,10 +13,6 @@ export const SPACE_ID_SPAN = 100_000;
 const DEFAULT_PROFILE_DIR = "Default";
 const NUMBERED_PROFILE = /^Profile (\d+)$/;
 const DEFAULT_ALIASES = new Set([undefined, "", "default"]);
-const BRAVE_USER_DATA_DIR = join(
-  homedir(),
-  "Library/Application Support/BraveSoftware/Brave-Browser",
-);
 
 /** The browser's profiles, read from its Local State file. */
 export class ProfileCatalog {
@@ -32,7 +29,7 @@ export class ProfileCatalog {
   }
 
   static load({
-    userDataDir = process.env.EGO_BRAVE_USER_DATA_DIR || BRAVE_USER_DATA_DIR,
+    userDataDir = process.env.EGO_BRAVE_USER_DATA_DIR || BROWSER.userDataDir,
     preferredId = process.env.EGO_BRAVE_PROFILE,
   } = {}) {
     const localState = JSON.parse(

@@ -5,16 +5,18 @@ import {
   readUsageGuide,
   runHarnessScript,
 } from "../src/cli/harness.mjs";
+import { BROWSER } from "../src/cli/browser.mjs";
 import { runLaunch } from "../src/cli/launch.mjs";
 import { openSession } from "../src/cli/session.mjs";
 
+const C = BROWSER.command.padEnd(9);
 const USAGE = `Usage:
-  ego-brave nodejs <<'EOF'      run a browser script (same API as ego-browser nodejs)
-  ego-brave nodejs -e '<code>'
-  ego-brave skill               print the usage guide
-  ego-brave doctor              check Brave, the extension and the harness build
-  ego-brave launch [--restart]  start Brave with remote debugging the macOS way;
-                                --restart quits a Brave running without it first
+  ${C} nodejs <<'EOF'      run a browser script (same API as ego-browser nodejs)
+  ${C} nodejs -e '<code>'
+  ${C} skill               print the usage guide
+  ${C} doctor              check ${BROWSER.app}, the extension and the harness build
+  ${C} launch [--restart]  start ${BROWSER.app} with remote debugging the macOS way;
+                           --restart quits one running without it first
 `;
 
 const [command, ...rest] = process.argv.slice(2);

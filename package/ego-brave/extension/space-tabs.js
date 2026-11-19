@@ -1,3 +1,4 @@
+import { addTab, holdsTab, tabsOf } from "./space-container.js";
 import { errorResult } from "./space-registry.js";
 import {
   tabIdForTarget,
@@ -22,7 +23,7 @@ export class SpaceTabs {
   async list({ spaceId }) {
     const resolved = await this.#registry.resolve(spaceId);
     if (resolved.error_code) return resolved;
-    return { tabs: await describeGroupTabs(resolved.space.groupId) };
+    return { tabs: await describeSpaceTabs(resolved.space) };
   }
 
   async create({ spaceId, url }) {
@@ -34,7 +35,7 @@ export class SpaceTabs {
       url,
       active: space.ownsWindow,
     });
-    await chrome.tabs.group({ groupId: space.groupId, tabIds: [tab.id] });
+    await addTab(space, tab.id);
     const targetId = await waitForTargetId(tab.id);
     if (!targetId)
       return errorResult(
@@ -59,7 +60,7 @@ export class SpaceTabs {
       tabId === undefined
         ? undefined
         : await chrome.tabs.get(tabId).catch(() => undefined);
-    if (tab?.groupId !== resolved.space.groupId) {
+    if (!tab || !holdsTab(resolved.space, tab)) {
       return errorResult(
         "EGO_OPERATION_FAILED",
         `Target ${targetId} is not in task space ${spaceId}`,
@@ -74,7 +75,7 @@ export class SpaceTabs {
   async activeTarget({ spaceId }) {
     const resolved = await this.#registry.resolve(spaceId);
     if (resolved.error_code) return resolved;
-    const tabs = await describeGroupTabs(resolved.space.groupId);
+    const tabs = await describeSpaceTabs(resolved.space);
     const chosen =
       tabs.find((tab) => tab.targetId === resolved.space.activeTargetId) ??
       tabs.find((tab) => tab.active) ??
@@ -88,9 +89,9 @@ export class SpaceTabs {
   }
 }
 
-async function describeGroupTabs(groupId) {
+async function describeSpaceTabs(space) {
   const [tabs, targetIds] = await Promise.all([
-    chrome.tabs.query({ groupId }),
+    tabsOf(space),
     targetIdsByTab(),
   ]);
   return tabs

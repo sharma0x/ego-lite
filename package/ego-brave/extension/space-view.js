@@ -1,3 +1,5 @@
+import { labelContainer } from "./space-container.js";
+
 // How a Space shows up in Brave: its tab group title, colour and the toolbar
 // badge. Only Spaces the agent created or claimed are decorated; a user's own
 // tab groups keep their title until they are claimed.
@@ -23,10 +25,11 @@ export async function decorateSpace(space) {
   if (!space.managed) return;
   const { icon } = spaceLabel(space);
   try {
-    await chrome.tabGroups.update(space.groupId, {
-      title: `${icon} ${space.name}`,
-      color: GROUP_COLORS[space.id % GROUP_COLORS.length],
-    });
+    await labelContainer(
+      space,
+      `${icon} ${space.name}`,
+      GROUP_COLORS[space.id % GROUP_COLORS.length],
+    );
   } catch {
     // The group was closed; the next listing prunes the Space.
   }

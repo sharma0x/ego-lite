@@ -1,10 +1,11 @@
 {
   "name": "ego-brave",
   "version": "0.1.0",
-  "description": "Run the ego-browser harness against your own Brave or Chrome over CDP, with Spaces shown as tab groups.",
+  "description": "Run the ego-browser harness against your own Brave, Chrome or Opera over CDP, with Spaces shown as tab groups (or windows in Opera).",
   "type": "module",
   "bin": {
-    "ego-brave": "./bin/ego-brave.mjs"
+    "ego-brave": "./bin/ego-brave.mjs",
+    "ego-opera": "./bin/ego-opera.mjs"
   },
   "scripts": {
     "build:harness": "npm --prefix ../ego-browser ci && npm --prefix ../ego-browser run build",
