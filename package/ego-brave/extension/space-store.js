@@ -7,8 +7,8 @@ const STORAGE_KEY = "egoBrave";
  *
  * Space fields: id, name, createdBy ('agent'|'user'), ownership ('agent'|'user'),
  * reason, status ('active'|'completed'), state, groupId (tab group) or
- * windowId (window Space, see space-container.js), ownsWindow, managed,
- * activeTargetId.
+ * tabIds (tab-set Space, see space-container.js), inAgentWindow, managed,
+ * activeTargetId. `agentWindowId` is the window all agent Spaces share.
  *
  * The extension runs once per browser profile. `profile` ({ id, name, idBase })
  * is assigned by the CLI, which alone knows which profile this instance is
@@ -30,6 +30,17 @@ export class SpaceStore {
       state.profile = profile;
       state.nextId = Math.max(state.nextId, profile.idBase + 1);
       return profile;
+    });
+  }
+
+  async agentWindowId() {
+    return (await this.#read()).agentWindowId ?? null;
+  }
+
+  setAgentWindowId(windowId) {
+    return this.#mutate((state) => {
+      state.agentWindowId = windowId;
+      return windowId;
     });
   }
 
@@ -59,6 +70,20 @@ export class SpaceStore {
       const removed = state.spaces.filter(predicate);
       state.spaces = state.spaces.filter((space) => !predicate(space));
       return removed;
+    });
+  }
+
+  /** Drops a closed tab from tab-set Spaces and removes the ones left empty. */
+  async forgetTab(tabId) {
+    const spaces = await this.all();
+    if (!spaces.some((space) => space.tabIds?.includes(tabId))) return;
+    await this.#mutate((state) => {
+      for (const space of state.spaces)
+        if (Array.isArray(space.tabIds))
+          space.tabIds = space.tabIds.filter((id) => id !== tabId);
+      state.spaces = state.spaces.filter(
+        (space) => !Array.isArray(space.tabIds) || space.tabIds.length > 0,
+      );
     });
   }
 

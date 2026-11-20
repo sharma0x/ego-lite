@@ -44,9 +44,9 @@ export class ProfileRouter {
     };
   }
 
-  async #createSpace({ name, profileId }) {
+  async #createSpace({ profileId, ...spaceArgs }) {
     const { rpc, cleanup } = await this.#opener.open(profileId);
-    const created = await rpc.call("createSpace", { name });
+    const created = await rpc.call("createSpace", spaceArgs);
     await cleanup();
     return created;
   }

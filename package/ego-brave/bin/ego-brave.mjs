@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
+
 import { runDoctor } from "../src/cli/doctor.mjs";
 import {
   assertHarnessBuilt,
@@ -10,13 +12,20 @@ import { runLaunch } from "../src/cli/launch.mjs";
 import { openSession } from "../src/cli/session.mjs";
 
 const C = BROWSER.command.padEnd(9);
+// Continuation lines line up under the descriptions.
+const CONTINUE = " ".repeat(`  ${C} launch [--restart]  `.length);
 const USAGE = `Usage:
   ${C} nodejs <<'EOF'      run a browser script (same API as ego-browser nodejs)
+  ${C} nodejs <file.mjs>   run a script file (any shell, including PowerShell)
   ${C} nodejs -e '<code>'
   ${C} skill               print the usage guide
   ${C} doctor              check ${BROWSER.app}, the extension and the harness build
-  ${C} launch [--restart]  start ${BROWSER.app} with remote debugging the macOS way;
-                           --restart quits one running without it first
+  ${C} launch [--restart]  start ${BROWSER.app} with remote debugging on port ${BROWSER.port};
+${CONTINUE}--restart quits one running without it first${
+  BROWSER.customUserDataDir
+    ? `\n${CONTINUE}(this agent browser: restarts it to load an update)`
+    : ""
+}
 `;
 
 const [command, ...rest] = process.argv.slice(2);
@@ -36,7 +45,7 @@ async function dispatch(name, args) {
 }
 
 async function runScript(args) {
-  const code = args[0] === "-e" ? (args[1] ?? "") : await readStdin();
+  const code = await scriptSource(args);
   if (!code.trim()) {
     process.stderr.write(USAGE);
     return 2;
@@ -61,6 +70,13 @@ function printGuide() {
   assertHarnessBuilt();
   process.stdout.write(readUsageGuide());
   return 0;
+}
+
+/** -e '<code>', a script file path, or stdin. */
+async function scriptSource(args) {
+  if (args[0] === "-e") return args[1] ?? "";
+  if (args[0] && !args[0].startsWith("-")) return readFileSync(args[0], "utf8");
+  return readStdin();
 }
 
 async function readStdin() {

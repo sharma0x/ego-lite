@@ -1,51 +1,66 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
 import { CdpChannel } from "../cdp/cdp-channel.mjs";
 import { CdpClient } from "../cdp/cdp-client.mjs";
-import { BROWSER } from "./browser.mjs";
-
-const run = promisify(execFile);
+import { reloadExtensions } from "../extension/extension-reload.mjs";
+import { BROWSER, stageExtension, stagedExtensionIsStale } from "./browser.mjs";
+import { platformFor } from "./platform.mjs";
 
 const APP_NAME = BROWSER.app;
 const DEBUGGING_PORT = BROWSER.port;
-// Without the three --disable-* flags, renderers in windows behind other apps
-// are throttled and CDP calls stall for seconds or time out.
-const LAUNCH_FLAGS = [
-  `--remote-debugging-port=${DEBUGGING_PORT}`,
-  "--disable-renderer-backgrounding",
-  "--disable-backgrounding-occluded-windows",
-  "--disable-background-timer-throttling",
-  ...BROWSER.extraFlags,
-];
-// A browser on its own user data dir runs as a second instance beside the
-// user's everyday one: open a new instance (-n) and find it by that dir.
-const OPEN_ARGS = BROWSER.customUserDataDir ? ["-n", "-a"] : ["-a"];
 const QUIT_TIMEOUT_MS = 20_000;
+const FORCE_QUIT_TIMEOUT_MS = 10_000;
 const START_TIMEOUT_MS = 30_000;
 const POLL_MS = 500;
 
 /**
- * Makes sure the browser (Brave, or Opera for ego-opera) runs with remote debugging, started through LaunchServices
- * (`open -a`). Starting the binary directly leaves it unregistered with macOS:
- * no keyboard focus, no Dock entry and no Quit menu.
+ * Browser flags for an agent session. Without the three --disable-* flags,
+ * renderers in windows behind other apps are throttled and CDP calls stall
+ * for seconds or time out.
+ */
+export function launchFlags(browser = BROWSER, profileDirectory = "Default") {
+  return [
+    `--remote-debugging-port=${browser.port}`,
+    "--disable-renderer-backgrounding",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-background-timer-throttling",
+    ...(browser.customUserDataDir
+      ? [`--user-data-dir=${browser.userDataDir}`, "--no-first-run"]
+      : []),
+    ...browser.extraFlags,
+    `--profile-directory=${profileDirectory}`,
+  ];
+}
+
+/**
+ * Makes sure the browser runs with remote debugging, started the way the OS
+ * expects (platform.mjs).
  *
  * @param {{ restart?: boolean, profileDirectory?: string }} options restart
- *   permits quitting a Brave that runs without debugging (tabs are restored).
+ *   permits quitting a browser that runs without debugging (tabs are restored).
  * @returns {Promise<number>} exit code
  */
 export async function runLaunch({
   restart = false,
   profileDirectory = "Default",
   output = process.stdout,
+  platform = platformFor(BROWSER),
 } = {}) {
-  if (await debuggingReady()) {
+  // A dedicated agent browser (its own user data dir) is the agent's alone,
+  // so --restart restarts it even when it is reachable, e.g. to load an
+  // updated extension. The user's own browser is only restarted to add
+  // debugging.
+  const restartReachable = restart && BROWSER.customUserDataDir;
+  if (!restartReachable && (await debuggingReady())) {
     output.write(
       `ok   ${APP_NAME} is already running with remote debugging on port ${DEBUGGING_PORT}\n`,
     );
+    if (stagedExtensionIsStale(BROWSER))
+      output.write(
+        `note the Agent Spaces extension changed; run \`${BROWSER.command} launch --restart\` to load it (tabs are restored)\n`,
+      );
     return 0;
   }
-  if (await isRunning()) {
+  let restarted = false;
+  if (await platform.isRunning()) {
     if (!restart) {
       output.write(
         `${APP_NAME} is running without remote debugging. Re-run with --restart to quit it ` +
@@ -53,52 +68,60 @@ export async function runLaunch({
       );
       return 3;
     }
-    await quit();
+    await quit(platform);
+    restarted = true;
   }
-  await run("open", [
-    ...OPEN_ARGS,
-    APP_NAME,
-    "--args",
-    ...LAUNCH_FLAGS,
-    `--profile-directory=${profileDirectory}`,
+  const { updated } = stageExtension(BROWSER);
+  await platform.start([
+    ...launchFlags(BROWSER, profileDirectory),
+    ...(restarted ? ["--restore-last-session"] : []),
   ]);
   await waitFor(
     debuggingReady,
     START_TIMEOUT_MS,
-    `${APP_NAME} did not open port ${DEBUGGING_PORT}`,
+    `${APP_NAME} did not open port ${DEBUGGING_PORT}. ` +
+      `If this is a managed (company) browser, run \`${BROWSER.command} doctor\`: ` +
+      "a policy may forbid remote debugging.",
   );
   output.write(
-    `ok   ${APP_NAME} started with remote debugging (profile ${profileDirectory})\n`,
+    `ok   ${APP_NAME} started with remote debugging on port ${DEBUGGING_PORT} (profile ${profileDirectory})\n`,
   );
+  if (updated) {
+    await withClient((client) =>
+      reloadExtensions(client, { waitForBridges: true }),
+    );
+    output.write("ok   Agent Spaces extension updated and reloaded\n");
+  }
   return 0;
 }
 
-export function launchCommand() {
-  return [
-    "open",
-    ...OPEN_ARGS,
-    JSON.stringify(APP_NAME),
-    "--args",
-    ...LAUNCH_FLAGS,
-    "--profile-directory=Default",
-  ].join(" ");
+async function withClient(use) {
+  const channel = await CdpChannel.connect(
+    `http://127.0.0.1:${DEBUGGING_PORT}`,
+  );
+  try {
+    return await use(new CdpClient(channel));
+  } finally {
+    channel.close();
+  }
 }
 
-async function quit() {
-  if (BROWSER.customUserDataDir)
-    await run("pkill", ["-f", `--user-data-dir=${BROWSER.userDataDir}`]).catch(
-      () => {},
-    );
-  else
-    await run("osascript", [
-      "-e",
-      `tell application ${JSON.stringify(APP_NAME)} to quit`,
-    ]).catch(() => {});
-  await waitFor(
-    async () => !(await isRunning()),
+/** Closes windows first so the session is saved; then clears leftover background processes. */
+async function quit(platform) {
+  await platform.quit();
+  const closed = await waitUntil(
+    async () => !(await platform.isRunning()),
     QUIT_TIMEOUT_MS,
-    `${APP_NAME} did not quit; quit it yourself and retry`,
   );
+  if (closed) return;
+  await platform.forceQuit();
+  if (
+    !(await waitUntil(
+      async () => !(await platform.isRunning()),
+      FORCE_QUIT_TIMEOUT_MS,
+    ))
+  )
+    throw new Error(`${APP_NAME} did not quit; quit it yourself and retry`);
 }
 
 async function debuggingReady() {
@@ -119,25 +142,15 @@ async function debuggingReady() {
   }
 }
 
-async function isRunning() {
-  try {
-    await run(
-      "pgrep",
-      BROWSER.customUserDataDir
-        ? ["-f", `--user-data-dir=${BROWSER.userDataDir}`]
-        : ["-x", APP_NAME],
-    );
-    return true;
-  } catch {
-    return false;
+async function waitUntil(condition, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await condition()) return true;
+    await new Promise((settle) => setTimeout(settle, POLL_MS));
   }
+  return false;
 }
 
 async function waitFor(condition, timeoutMs, failure) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await condition()) return;
-    await new Promise((settle) => setTimeout(settle, POLL_MS));
-  }
-  throw new Error(failure);
+  if (!(await waitUntil(condition, timeoutMs))) throw new Error(failure);
 }

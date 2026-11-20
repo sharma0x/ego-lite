@@ -30,12 +30,26 @@ export class BraveEgo {
   #control;
   #cdp;
   #browserVersion;
+  #dedicatedBrowser;
 
   /** The plain object installed as globalThis.ego. */
   bindings;
 
-  constructor({ harnessChannel, rpc, profiles, snapshots, browserVersion }) {
+  /**
+   * @param {object} options dedicatedBrowser: the browser runs only for
+   *   agents (its own user data dir), so its existing window may become
+   *   the agent window.
+   */
+  constructor({
+    harnessChannel,
+    rpc,
+    profiles,
+    snapshots,
+    browserVersion,
+    dedicatedBrowser = false,
+  }) {
     this.#rpc = rpc;
+    this.#dedicatedBrowser = dedicatedBrowser;
     this.#profiles = profiles;
     this.#snapshots = snapshots;
     this.#browserVersion = browserVersion;
@@ -138,7 +152,11 @@ export class BraveEgo {
     if (!profile) {
       return errorResult(ErrorCode.PROFILE_NOT_FOUND, "Profile not found");
     }
-    return this.#rpc.call("createSpace", { name, profileId: profile.id });
+    return this.#rpc.call("createSpace", {
+      name,
+      profileId: profile.id,
+      ...(this.#dedicatedBrowser && { dedicatedBrowser: true }),
+    });
   }
 
   async #claimTaskSpace(args) {

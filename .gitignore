@@ -79,6 +79,8 @@ browser/
 task/
 test-e2e/
 test/
+# ego-brave keeps its unit tests in test/ (npm test there)
+!package/ego-brave/test/
 # Translated skill (local only)
 package/ego-browser/skill-body/SKILL.zh.md
 

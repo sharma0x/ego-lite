@@ -1,20 +1,18 @@
 import { spawn } from "node:child_process";
-import { basename, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename } from "node:path";
 
+import { BROWSER } from "../cli/browser.mjs";
 import { bridgeMissing } from "../extension/extension-rpc.mjs";
 import { ActiveProfilePage } from "./active-profile-page.mjs";
 
-const EXTENSION_DIR = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../extension",
-);
 const SWITCH_ATTEMPTS = 20;
 const SWITCH_DELAY_MS = 300;
 const SETTLE_ATTEMPTS = 3;
 const BRIDGE_ATTEMPTS = 20;
 const BRIDGE_DELAY_MS = 150;
-const NEW_TAB_URL = /^chrome:\/\/newtab\/?$/;
+// Edge opens edge://newtab, or its MSN page when the profile is signed in.
+const NEW_TAB_URL =
+  /^(?:(?:chrome|edge):\/\/newtab\/?|https:\/\/ntp\.msn\.com\/edge\/ntp\b.*)$/;
 
 const PROFILE_PATH_READY =
   "Boolean(document.getElementById('profile_path')?.textContent)";
@@ -39,13 +37,15 @@ export class ProfileOpener {
   #catalog;
   #directory;
   #browserExecutable;
+  #userDataDir;
   #pages;
 
-  constructor({ client, catalog, directory, browserExecutable }) {
+  constructor({ client, catalog, directory, browserExecutable, userDataDir }) {
     this.#client = client;
     this.#catalog = catalog;
     this.#directory = directory;
     this.#browserExecutable = browserExecutable;
+    this.#userDataDir = userDataDir;
     this.#pages = new ActiveProfilePage(client);
   }
 
@@ -73,8 +73,14 @@ export class ProfileOpener {
   }
 
   async #switchTo(profileId) {
+    // Already active (always so in a single-profile agent browser): switching
+    // would only open a stray window.
+    const current = await this.#identifyActiveProfile();
+    if (current.profileId === profileId) return current.browserContextId;
     const contextBefore = await this.#activeContextId();
-    spawn(this.#browserExecutable, [`--profile-directory=${profileId}`], {
+    const args = [`--profile-directory=${profileId}`];
+    if (this.#userDataDir) args.unshift(`--user-data-dir=${this.#userDataDir}`);
+    spawn(this.#browserExecutable, args, {
       detached: true,
       stdio: "ignore",
     }).unref();
@@ -102,7 +108,7 @@ export class ProfileOpener {
     const running = await this.#directory.inContext(browserContextId);
     if (running) return running;
     const { id } = await this.#client.call("Extensions.loadUnpacked", {
-      path: EXTENSION_DIR,
+      path: BROWSER.extensionDir,
     });
     await this.#allowUnpackedExtension(id);
     for (let attempt = 0; attempt < BRIDGE_ATTEMPTS; attempt += 1) {

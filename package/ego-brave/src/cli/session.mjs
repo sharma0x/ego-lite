@@ -1,5 +1,3 @@
-import { execFileSync } from "node:child_process";
-
 import { BraveEgo } from "../bindings/brave-ego.mjs";
 import { CdpChannel } from "../cdp/cdp-channel.mjs";
 import { CdpClient } from "../cdp/cdp-client.mjs";
@@ -9,6 +7,8 @@ import { ProfileCatalog } from "../profiles/profile-catalog.mjs";
 import { ProfileOpener } from "../profiles/profile-opener.mjs";
 import { ProfileRouter } from "../profiles/profile-router.mjs";
 import { SnapshotService } from "../snapshot/snapshot-service.mjs";
+import { BROWSER } from "./browser.mjs";
+import { platformFor } from "./platform.mjs";
 
 const ADAPTER_VERSION = "0.2.0";
 
@@ -35,6 +35,7 @@ export async function openSession() {
       profiles,
       snapshots: new SnapshotService(client),
       browserVersion: `ego-brave ${ADAPTER_VERSION} (${browser.product})`,
+      dedicatedBrowser: BROWSER.customUserDataDir,
     });
     return {
       bindings: ego.bindings,
@@ -53,7 +54,9 @@ export function createProfileRouter({ client, profiles, browserProcessId }) {
     client,
     catalog: profiles,
     directory,
-    browserExecutable: executableOf(browserProcessId),
+    browserExecutable: platformFor(BROWSER).executableOf(browserProcessId),
+    // A browser on its own user data dir only hears switches that name it.
+    userDataDir: BROWSER.customUserDataDir ? BROWSER.userDataDir : undefined,
   });
   return new ProfileRouter({ catalog: profiles, directory, opener });
 }
@@ -64,13 +67,6 @@ export async function browserProcessIdOf(client) {
   if (!browser)
     throw new Error("SystemInfo.getProcessInfo reported no browser process");
   return browser.id;
-}
-
-/** The running browser's binary; launching it hands arguments to that instance. */
-function executableOf(processId) {
-  return execFileSync("ps", ["-o", "comm=", "-p", String(processId)], {
-    encoding: "utf8",
-  }).trim();
 }
 
 function closeAll(...channels) {

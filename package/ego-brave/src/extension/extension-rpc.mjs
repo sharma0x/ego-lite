@@ -1,3 +1,4 @@
+import { BROWSER } from "../cli/browser.mjs";
 import { ErrorCode, codedError } from "../errors.mjs";
 
 const BRIDGE_PATH = "/offscreen.html";
@@ -75,7 +76,8 @@ export async function findBridges(client) {
 }
 
 function isBridgeUrl(url) {
-  return url.startsWith("chrome-extension://") && url.endsWith(BRIDGE_PATH);
+  // Edge may report its extension pages as extension:// instead of chrome-extension://.
+  return /^(chrome-)?extension:\/\//.test(url) && url.endsWith(BRIDGE_PATH);
 }
 
 export class BridgeMissingError extends Error {
@@ -84,6 +86,6 @@ export class BridgeMissingError extends Error {
 
 export function bridgeMissing(detail = "") {
   return new BridgeMissingError(
-    `The ego-brave extension is not running in this profile${detail}. Load package/ego-brave/extension via brave://extensions (Developer mode > Load unpacked), then run \`ego-brave doctor\`.`,
+    `The ego-brave extension is not running in this profile${detail}. Run \`${BROWSER.command} doctor\`; if it still fails, load package/ego-brave/extension via ${BROWSER.extensionsPage} (Developer mode > Load unpacked).`,
   );
 }

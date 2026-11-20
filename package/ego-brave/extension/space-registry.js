@@ -1,8 +1,10 @@
 import {
   closeContainer,
   createContainer,
-  isWindowSpace,
+  isObsoleteSpace,
+  isTabSetSpace,
   liveContainer,
+  openAgentTab,
   tabsOf,
 } from "./space-container.js";
 
@@ -15,13 +17,16 @@ export function errorResult(errorCode, message) {
 
 /**
  * Space lifecycle and ownership. A Space is a tab group (or, in browsers
- * without working tab groups, its own window; see space-container.js): agent-created Spaces
- * get their own unfocused window so the agent never switches the user's tabs;
- * a user's own tab groups are listed as user-owned Spaces they can let the
+ * without working tab groups, a set of tabs; see space-container.js). Agent
+ * Spaces share one unfocused agent window per profile, so the agent never
+ * switches the user's tabs and the user sees every task in one window; a
+ * user's own tab groups are listed as user-owned Spaces they can let the
  * agent claim.
  */
 export class SpaceRegistry {
   #store;
+  // Serialises create() so Spaces started at once share one agent window.
+  #creating = Promise.resolve();
 
   constructor(store) {
     this.#store = store;
@@ -68,23 +73,26 @@ export class SpaceRegistry {
     return this.#store.setProfile({ id, name, idBase });
   }
 
-  async create({ name }) {
-    const window = await chrome.windows.create({
-      url: "about:blank",
-      focused: false,
+  create({ name, dedicatedBrowser = false }) {
+    const run = this.#creating.then(async () => {
+      const { windowId, tabId } = await openAgentTab(this.#store, {
+        dedicatedBrowser,
+      });
+      const container = await createContainer(windowId, tabId);
+      const space = await this.#store.add({
+        name,
+        createdBy: "agent",
+        ownership: "agent",
+        status: "active",
+        state: "",
+        ...container,
+        inAgentWindow: true,
+        managed: true,
+      });
+      return descriptor(space);
     });
-    const container = await createContainer(window);
-    const space = await this.#store.add({
-      name,
-      createdBy: "agent",
-      ownership: "agent",
-      status: "active",
-      state: "",
-      ...container,
-      ownsWindow: true,
-      managed: true,
-    });
-    return descriptor(space);
+    this.#creating = run.catch(() => {});
+    return run;
   }
 
   async claim({ spaceId, name }) {
@@ -113,7 +121,7 @@ export class SpaceRegistry {
   async close({ spaceId }) {
     const resolved = await this.resolve(spaceId);
     if (resolved.error_code) return resolved;
-    await closeContainer(resolved.space, resolved.group);
+    await closeContainer(resolved.space);
     await this.#store.removeWhere((space) => space.id === spaceId);
     return `${spaceId} task space closed.`;
   }
@@ -146,10 +154,19 @@ export class SpaceRegistry {
     return this.#transition(spaceId, { state }, "state updated.");
   }
 
+  /** Brings the Space's window forward and selects its current tab. */
   async focus({ spaceId }) {
     const resolved = await this.resolve(spaceId);
     if (resolved.error_code) return resolved;
-    await chrome.windows.update(resolved.group.windowId, { focused: true });
+    const { space, group } = resolved;
+    if (!isTabSetSpace(space))
+      await chrome.tabGroups
+        .update(space.groupId, { collapsed: false })
+        .catch(() => {});
+    const tabs = await tabsOf(space);
+    const tab = tabs.find((candidate) => candidate.active) ?? tabs.at(-1);
+    if (tab) await chrome.tabs.update(tab.id, { active: true });
+    await chrome.windows.update(group.windowId, { focused: true });
     return `${spaceId} focused.`;
   }
 
@@ -160,33 +177,39 @@ export class SpaceRegistry {
     return `${spaceId} ${message}`;
   }
 
-  /** Drop Spaces whose group or window is gone; list the user's other groups as user Spaces. */
+  /** Drop Spaces whose group or tabs are gone; list the user's other groups as user Spaces. */
   async #syncWithTabGroups() {
     const groups = await queryAllTabGroups();
     const liveIds = new Set(groups.map((group) => group.id));
-    const liveWindows = new Set(
-      (await chrome.windows.getAll()).map((window) => window.id),
+    const liveTabs = new Set(
+      (await chrome.tabs.query({})).map((tab) => tab.id),
     );
-    await this.#store.removeWhere((space) =>
-      isWindowSpace(space)
-        ? !liveWindows.has(space.windowId)
-        : !liveIds.has(space.groupId),
-    );
+    await this.#store.removeWhere((space) => {
+      if (isObsoleteSpace(space)) return true;
+      if (isTabSetSpace(space))
+        return !space.tabIds.some((id) => liveTabs.has(id));
+      return !liveIds.has(space.groupId);
+    });
     const knownIds = new Set(
       (await this.#store.all()).map((space) => space.groupId),
     );
     for (const group of groups.filter(
       (candidate) => !knownIds.has(candidate.id),
     )) {
+      // A status prefix marks an agent Space restored after a browser
+      // restart: nothing drives it now, so it is the user's, labelled as such
+      // (or still done), and an agent can claim it again by name.
+      const restoredStatus = STATUS_PREFIX.exec(group.title ?? "")?.[1];
       await this.#store.add({
         name: groupTitleWithoutStatus(group),
-        createdBy: "user",
+        createdBy: restoredStatus ? "agent" : "user",
         ownership: "user",
-        status: "active",
+        status: restoredStatus === "✓" ? "completed" : "active",
         state: "",
         groupId: group.id,
-        ownsWindow: false,
-        managed: false,
+        inAgentWindow: Boolean(restoredStatus),
+        managed: Boolean(restoredStatus),
+        color: group.color,
       });
     }
   }

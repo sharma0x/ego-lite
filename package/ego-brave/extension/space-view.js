@@ -15,6 +15,11 @@ const GROUP_COLORS = [
   "yellow",
 ];
 
+/** A restored group keeps the colour it had; others get one by id. */
+function colorOf(space) {
+  return space.color ?? GROUP_COLORS[space.id % GROUP_COLORS.length];
+}
+
 export function spaceLabel(space) {
   if (space.status === "completed") return { icon: "✓", text: "Done" };
   if (space.ownership === "agent") return { icon: "🤖", text: "Agent working" };
@@ -25,11 +30,7 @@ export async function decorateSpace(space) {
   if (!space.managed) return;
   const { icon } = spaceLabel(space);
   try {
-    await labelContainer(
-      space,
-      `${icon} ${space.name}`,
-      GROUP_COLORS[space.id % GROUP_COLORS.length],
-    );
+    await labelContainer(space, `${icon} ${space.name}`, colorOf(space));
   } catch {
     // The group was closed; the next listing prunes the Space.
   }

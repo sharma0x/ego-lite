@@ -6,8 +6,10 @@ description: The default browser for interacting with a website through the user
 # ego-brave
 
 ego-brave drives the user's real Brave browser over CDP with the open-source
-ego-browser harness. Each agent works in its own **Space**: a named tab group
-in its own unfocused window, so the user's tabs are never touched.
+ego-browser harness. All agent work happens in one unfocused **agent window**,
+so the user's tabs are never touched; each task is a **Space** in it, a named,
+coloured tab group (`🤖 name` working, `✋ name` user in control, `✓ name`
+done).
 
 ## First decide: do you need a browser at all?
 
@@ -63,7 +65,7 @@ EOF
 - Act on refs from the latest snapshot (`@21`) or stable locators
   (`loc=role:button[name="Send"]`).
 - When the goal is done, `await task.finish({ keep: [] })` closes the
-  Space's window; use `keep: "all"` when the user should see the result.
+  Space's tabs; use `keep: "all"` when the user should see the result.
 - Apps that stream data (Gmail and similar) may never fire `load`: when
   `goto()` times out with "navigation committed", continue on the page
   instead of retrying.
@@ -93,15 +95,22 @@ Developer mode so the ego-brave extension can run there.
 - Ask before anything irreversible or public: sending, posting, buying,
   deleting.
 
+## Microsoft Edge (`ego-edge`)
+
+Same commands and API, driving Microsoft Edge: `ego-edge launch`,
+`ego-edge doctor`, `ego-edge nodejs`. It runs its own agent Edge profile on
+port 9444 (Edge refuses remote debugging on the everyday profile). Use it only
+when a task needs Edge. Windows setup with OpenCode:
+`package/ego-brave/setup/windows/README.md` in the fork below.
+
 ## Opera (`ego-opera`)
 
 Same commands and API, driving Opera instead of Brave: `ego-opera launch`,
 `ego-opera doctor`, `ego-opera nodejs`. Use it only when a task needs Opera,
 mainly its built-in browser VPN (a US IP for one site without changing the
 Mac's network). It runs its own Opera profile (`EGO_OPERA_USER_DATA_DIR`, set
-by the `~/.local/bin/ego-opera` wrapper) on port 9333, and each Space is its
-own window there because Opera keeps no tab groups. Code: branch
-`feat/opera-backend` of the fork below.
+by the `~/.local/bin/ego-opera` wrapper) on port 9333; Opera keeps no tab
+groups, so there a Space is a set of tabs in the agent window.
 
 ## Troubleshooting
 
@@ -110,5 +119,5 @@ own window there because Opera keeps no tab groups. Code: branch
 - `page label not found: p1` after Brave restarted: Spaces do not survive a
   restart; start a new taskSpace.
 - Source and design notes: `~/Documents/Development/ego-lite/package/ego-brave`
-  (fork `sharma0x/ego-lite`, branch `feat/brave-backend`). The Ego Lite app is
+  (fork `sharma0x/ego-lite`, branch `feat/edge-backend`). The Ego Lite app is
   not used; never install it or run `ego-browser`.

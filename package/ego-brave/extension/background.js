@@ -58,11 +58,9 @@ chrome.tabGroups.onRemoved.addListener((group) => {
   void store.removeWhere((space) => space.groupId === group.id);
 });
 
-// Window Spaces (browsers without working tab groups) end with their window.
-chrome.windows.onRemoved.addListener((windowId) => {
-  void store.removeWhere(
-    (space) => space.groupId == null && space.windowId === windowId,
-  );
+// Tab-set Spaces (browsers without working tab groups) end with their last tab.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void store.forgetTab(tabId);
 });
 
 // idBase tells the CLI which id range this profile owns, so an update from
@@ -98,5 +96,24 @@ async function ensureBridge() {
 }
 
 chrome.runtime.onStartup.addListener(ensureBridge);
+
+// Session restore recreates agent Spaces as plain groups still titled
+// "🤖 name", often before this worker listens for tab group events. Once per
+// browser session (storage.session is cleared on restart), list a few times
+// while the restore settles: listing adopts those groups as the user's and
+// relabels them, so no stale "agent working" label stays up.
+const RESTORE_SETTLE_DELAYS_MS = [0, 2000, 5000];
+
+async function adoptRestoredSpaces() {
+  const { restoreAdopted } = await chrome.storage.session.get("restoreAdopted");
+  if (restoreAdopted) return;
+  await chrome.storage.session.set({ restoreAdopted: true });
+  for (const delay of RESTORE_SETTLE_DELAYS_MS) {
+    await new Promise((settle) => setTimeout(settle, delay));
+    await registry.list().catch(() => {});
+  }
+}
+
+void adoptRestoredSpaces();
 chrome.runtime.onInstalled.addListener(ensureBridge);
 void ensureBridge();

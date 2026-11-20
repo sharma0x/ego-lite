@@ -7,7 +7,7 @@ import {
 } from "./target-map.js";
 
 /**
- * The tabs inside one Space. "Active" is tracked per Space: in a Space's own
+ * The tabs inside one Space. "Active" is tracked per Space: in the agent
  * window the tab is also selected, but focus never moves, and in a claimed
  * user group the user's selected tab is left alone.
  */
@@ -33,9 +33,10 @@ export class SpaceTabs {
     const tab = await chrome.tabs.create({
       windowId: group.windowId,
       url,
-      active: space.ownsWindow,
+      active: Boolean(space.inAgentWindow),
     });
-    await addTab(space, tab.id);
+    const patch = await addTab(space, tab.id);
+    if (patch) await this.#store.update(spaceId, patch);
     const targetId = await waitForTargetId(tab.id);
     if (!targetId)
       return errorResult(
@@ -66,7 +67,7 @@ export class SpaceTabs {
         `Target ${targetId} is not in task space ${spaceId}`,
       );
     }
-    if (resolved.space.ownsWindow)
+    if (resolved.space.inAgentWindow)
       await chrome.tabs.update(tabId, { active: true });
     await this.#store.update(spaceId, { activeTargetId: targetId });
     return {};

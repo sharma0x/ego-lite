@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { BROWSER } from "../cli/browser.mjs";
@@ -32,17 +32,23 @@ export class ProfileCatalog {
     userDataDir = process.env.EGO_BRAVE_USER_DATA_DIR || BROWSER.userDataDir,
     preferredId = process.env.EGO_BRAVE_PROFILE,
   } = {}) {
-    const localState = JSON.parse(
-      readFileSync(join(userDataDir, "Local State"), "utf8"),
-    );
+    const localState = readJson(join(userDataDir, "Local State")) ?? {};
     const cache = localState.profile?.info_cache ?? {};
     const profiles = Object.entries(cache).map(([id, info]) => ({
       id,
       name: info.name || id,
     }));
+    // A new user data dir lists no profile in Local State until the browser
+    // writes it later, so profile folders on disk, and the last used one,
+    // count too.
+    const lastUsed = localState.profile?.last_used;
+    for (const id of new Set([...profileDirsOnDisk(userDataDir), lastUsed]))
+      if (id && isSupportedId(id) && !cache[id])
+        profiles.push({ id, name: nameFromPreferences(userDataDir, id) });
+    const known = new Set(profiles.map((profile) => profile.id));
     const defaultId =
-      [preferredId, DEFAULT_PROFILE_DIR, localState.profile?.last_used].find(
-        (id) => id && cache[id],
+      [preferredId, DEFAULT_PROFILE_DIR, lastUsed].find(
+        (id) => id && known.has(id),
       ) ?? profiles[0]?.id;
     return new ProfileCatalog(profiles, defaultId);
   }
@@ -71,6 +77,26 @@ export class ProfileCatalog {
   profileIdForSpace(spaceId) {
     const block = Math.floor(spaceId / SPACE_ID_SPAN);
     return block === 0 ? DEFAULT_PROFILE_DIR : `Profile ${block}`;
+  }
+}
+
+function profileDirsOnDisk(userDataDir) {
+  if (!existsSync(userDataDir)) return [];
+  return readdirSync(userDataDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && isSupportedId(entry.name))
+    .map((entry) => entry.name);
+}
+
+function nameFromPreferences(userDataDir, id) {
+  return readJson(join(userDataDir, id, "Preferences"))?.profile?.name || id;
+}
+
+/** Parsed JSON, or undefined while the browser has not written the file yet. */
+function readJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return undefined;
   }
 }
 
