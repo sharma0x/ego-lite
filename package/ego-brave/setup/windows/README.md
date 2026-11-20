@@ -1,0 +1,128 @@
+# ego-edge on a Windows laptop with OpenCode
+
+This sets up OpenCode to drive **Microsoft Edge**: agents open pages, click,
+fill forms and read signed-in web apps the way you would, in an Edge window
+you can watch and take over at any time.
+
+What you get:
+
+| Piece                      | What it is                                                                                                                   |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ego-edge` command         | Starts the agent Edge and runs browser scripts for the agent.                                                                |
+| **agent Edge**             | A separate Edge with its own profile (`%LOCALAPPDATA%\ego-edge`). Your everyday Edge, its tabs and its logins are untouched. |
+| **Agent Spaces** extension | Loaded into the agent Edge only. Shows every agent task as a named tab group and lets you take over, hand back or stop.      |
+| `ego-edge` OpenCode skill  | Tells OpenCode when and how to use the browser.                                                                              |
+| `edge-devtools` MCP server | chrome-devtools-mcp attached to the agent Edge, for console, network and performance diagnosis.                              |
+
+All agent work happens in **one agent window**. Each task is a coloured tab
+group titled `🤖 name` while the agent works, `✋ name` when you are in
+control and `✓ name` when it is done.
+
+## 1. Prerequisites
+
+Install these first. None need administrator rights if your company's
+software portal is not available.
+
+- **Node.js 22 or newer**: the LTS installer from nodejs.org, or
+  `winget install OpenJS.NodeJS.LTS`. Check with `node --version`.
+- **Git**: `winget install Git.Git`, or Git for Windows from git-scm.com.
+- **OpenCode**: installed the usual way.
+- **Microsoft Edge**: already on every Windows laptop.
+
+Behind a company proxy, point npm and Git at it first:
+
+```powershell
+npm config set proxy http://proxy.example:8080
+npm config set https-proxy http://proxy.example:8080
+git config --global http.proxy http://proxy.example:8080
+```
+
+## 2. Install
+
+In PowerShell:
+
+```powershell
+git clone --branch feat/edge-backend https://github.com/sharma0x/ego-lite.git $env:USERPROFILE\ego-lite
+powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\ego-lite\package\ego-brave\setup\windows\install.ps1
+```
+
+`-ExecutionPolicy Bypass` applies to that one run only; it does not change
+your machine's policy. The script prints `ok` for each step and ends by
+starting the agent Edge and running `ego-edge doctor`.
+
+It installs into:
+
+- `%USERPROFILE%\ego-lite`: the source (a Git clone).
+- `%APPDATA%\npm`: the `ego-edge` and `chrome-devtools-mcp` commands.
+- `%USERPROFILE%\.config\opencode\skills\ego-edge`: a link to the skill.
+- `%USERPROFILE%\.config\opencode\opencode.json`: the `edge-devtools` MCP
+  server is added (the previous file is kept as `opencode.json.bak`). If your
+  config is `opencode.jsonc` or has comments, the script prints the snippet to
+  paste instead of editing it.
+- `%LOCALAPPDATA%\ego-edge`: the agent Edge profile and its extension copy.
+
+## 3. First run
+
+1. **Sign in once in the agent Edge.** It starts signed out. Sign in to the
+   work accounts agents should use (Microsoft 365, Jira and so on) in that
+   window; the agent profile keeps the sessions. Agents never type your
+   passwords: when a site asks for a login or MFA, the agent hands the window
+   to you and waits.
+2. **Restart OpenCode** so it loads the skill and the MCP server.
+3. **Try it:** ask OpenCode
+   _"Use the ego-edge skill to open example.com and tell me its heading."_
+   A `🤖` tab group appears in the agent Edge window.
+
+## 4. Everyday use
+
+- Ask for browser tasks in plain words; the skill makes OpenCode use the
+  browser only when a web search, a fetch or an API cannot do the job.
+- The **Agent Spaces** toolbar button in the agent Edge lists the agent's
+  tasks: **Take over** stops the agent on that task, **Hand back** lets it
+  continue, **Show** brings the task forward, **Stop** closes it.
+- If the agent Edge is closed, the agent reopens it with `ego-edge launch`.
+- Commands, if you want them yourself:
+
+  ```powershell
+  ego-edge launch            # start the agent Edge (or confirm it runs)
+  ego-edge launch --restart  # restart it, e.g. after an update; tabs come back
+  ego-edge doctor            # check everything
+  ego-edge nodejs task.mjs   # run a browser script file
+  ```
+
+## 5. Update
+
+Run the install script again. It pulls the latest code, rebuilds, and then:
+
+```powershell
+ego-edge launch --restart
+```
+
+so the agent Edge loads the new extension. `ego-edge doctor` tells you when
+that restart is still needed.
+
+## 6. Troubleshooting
+
+| You see                                                                                                   | Do                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FAIL policy: RemoteDebuggingAllowed` or `DeveloperToolsAvailability = 2`                                 | Your IT department has blocked remote control of Edge. Agents cannot work in Edge until they allow it for your machine; check `edge://policy` and ask them. Do not try to work around it. |
+| `FAIL policy: ExtensionDeveloperModeSettings`, `ExtensionInstallBlocklist = *` or `ExtensionAllowedTypes` | Unpacked extensions are blocked, so the Agent Spaces extension cannot load. Same as above: IT has to allow it.                                                                            |
+| `running scripts is disabled on this system` when typing `ego-edge`                                       | PowerShell's execution policy blocks npm's `.ps1` shims. Use `ego-edge.cmd` (same arguments). OpenCode's skill knows this.                                                                |
+| `Microsoft Edge was not found`                                                                            | Edge is installed in an unusual place. Set `EGO_EDGE_EXE` to the full path of `msedge.exe`.                                                                                               |
+| `node`, `npm` or `ego-edge` not found                                                                     | Open a new terminal after installing Node.js, so PATH includes `%APPDATA%\npm`.                                                                                                           |
+| `npm ci` fails with network errors                                                                        | Set the npm proxy (section 1), or your company's npm registry: `npm config set registry <url>`.                                                                                           |
+| The agent says the extension is out of date                                                               | `ego-edge launch --restart`.                                                                                                                                                              |
+
+## 7. Uninstall
+
+Close the agent Edge window first (your everyday Edge can stay open), then:
+
+```powershell
+npm uninstall --global ego-brave chrome-devtools-mcp
+# rmdir removes only the link; Remove-Item could follow it into the source.
+cmd /c rmdir "$env:USERPROFILE\.config\opencode\skills\ego-edge"
+Remove-Item -Recurse $env:LOCALAPPDATA\ego-edge    # agent profile and its logins
+Remove-Item -Recurse -Force $env:USERPROFILE\ego-lite
+```
+
+Then remove the `edge-devtools` entry from `opencode.json`.

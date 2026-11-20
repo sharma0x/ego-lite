@@ -1,10 +1,10 @@
 # ego-brave
 
-Run the open-source `ego-browser` harness against **your own Brave** (or any
-Chromium) over CDP, instead of the Ego Lite app. Agents keep the same scripts,
-the same `taskSpace()` / `Page` API and the same usage guide, and your browser
-shows each agent Space as a named tab group you can watch, take over, hand
-back or stop.
+Run the open-source `ego-browser` harness against **your own Brave**, **Microsoft
+Edge**, Opera (or any Chromium) over CDP, instead of the Ego Lite app. Agents
+keep the same scripts, the same `taskSpace()` / `Page` API and the same usage
+guide. All agent work happens in **one agent window**, where each Space is a
+named, coloured tab group you can watch, take over, hand back or stop.
 
 ```bash
 ego-brave nodejs <<'EOF'
@@ -14,6 +14,47 @@ await page.goto("https://example.com");
 console.log(await page.snapshot());
 EOF
 ```
+
+Scripts can also come from a file, which works in every shell including
+PowerShell: `ego-brave nodejs task.mjs`.
+
+## Microsoft Edge (Windows and macOS)
+
+`ego-edge` is the same CLI and API driving Edge. Chromium 136+ refuses remote
+debugging on a browser's default profile, so `ego-edge` always runs its own
+**agent Edge**: a second Edge instance on its own user data dir, next to the
+user's everyday Edge, which it never touches.
+
+```bash
+ego-edge launch      # start the agent Edge on port 9444 (or confirm it runs)
+ego-edge doctor      # also reports company policies that block agents
+ego-edge nodejs task.mjs
+```
+
+| Platform | Agent profile                                      | Edge found at                                                                                       |
+| -------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Windows  | `%LOCALAPPDATA%\ego-edge\User Data`                | `msedge.exe` under Program Files (x86), Program Files or `%LOCALAPPDATA%`; `EGO_EDGE_EXE` overrides |
+| macOS    | `~/Library/Application Support/ego-edge/User Data` | `/Applications` or `~/Applications`; `EGO_EDGE_APP` (an `.app` path) overrides                      |
+
+- The extension is staged into the agent profile's folder (`ego-edge/extension`)
+  on every launch: on macOS a browser reading the repo under `~/Documents`
+  stops on a privacy prompt, and a fixed path keeps the extension id stable.
+- Windows: the browser is spawned directly (no LaunchServices), found by its
+  `--user-data-dir` through `Win32_Process`, and closed with `taskkill`
+  (windows first, so the session is saved).
+- `doctor` reads Edge's enterprise policies (registry on Windows, managed
+  preferences on macOS) and names any that block agents:
+  `RemoteDebuggingAllowed`, `DeveloperToolsAvailability = 2`,
+  `ExtensionDeveloperModeSettings`, `ExtensionInstallBlocklist = *`,
+  `ExtensionAllowedTypes`.
+- `--restart` always restarts the agent Edge (it is the agent's own browser),
+  for example to load an updated extension.
+- The agent profile starts signed out; the user signs in to work accounts
+  there once.
+
+Windows onboarding with OpenCode (installer, skill, `edge-devtools` MCP
+server): [`setup/windows/README.md`](setup/windows/README.md). The OpenCode
+skill is [`skills/ego-edge/SKILL.md`](skills/ego-edge/SKILL.md).
 
 ## Opera
 
@@ -26,8 +67,9 @@ ego-opera doctor
 ego-opera nodejs -e 'const task = await taskSpace("research"); ...'
 ```
 
-Opera accepts `chrome.tabs.group()` but keeps no tab groups, so there each
-Space is its own window instead of a group (`extension/space-container.js`).
+Opera accepts `chrome.tabs.group()` but keeps no tab groups, so there a Space
+is a set of tabs in the shared agent window instead of a group
+(`extension/space-container.js`); tell them apart in the Agent Spaces popup.
 Everything else - ownership, hand-off, Take over, `finish()` - behaves the
 same. Useful for Opera's built-in browser VPN.
 
@@ -43,17 +85,17 @@ ego-brave CLI ── installs ──▶ globalThis.ego (BraveEgo)
                                │                    Target.activateTarget handled in the Space
                                ├─ SnapshotService   AX tree + DOMSnapshot layout → native snapshot format
                                └─ ExtensionRpc      Runtime.evaluate in the extension's offscreen page
-Brave extension ── SpaceStore (chrome.storage) · one unfocused window + tab group per Space
+Brave extension ── SpaceStore (chrome.storage) · one shared agent window, one tab group per Space
                    popup: Take over · Hand back · Show · Stop · toolbar badge
 ```
 
-| Ego Lite              | ego-brave                                                                                                                                                                                                              |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Space                 | A tab group. Agent Spaces get their own unfocused window, so the agent never switches or focuses your tabs. Your own tab groups are listed as user Spaces the agent can claim.                                         |
-| Space sidebar         | Tab group title `🤖 name` (agent working), `✋ name` (you're in control), `✓ name` (done), plus the toolbar popup.                                                                                                     |
-| Take over / hand back | Popup buttons. Ownership changes are pushed to running agents; a take-over hard-stops the agent with the harness's own user-control message.                                                                           |
-| Native snapshot       | `Accessibility.getFullAXTree`, rendered in the native format (`root`, two-space indent, `[ref=<backendNodeId>, loc=...]`); viewport scope uses DOMSnapshot bounds.                                                     |
-| Profiles              | Every Brave profile. `taskSpace(name, { profileId })` opens the Space in that profile; without one it uses the default (`Default`, or `EGO_BRAVE_PROFILE`). Space ids encode their profile (`Profile 7` owns 700001…). |
+| Ego Lite              | ego-brave                                                                                                                                                                                                                                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Space                 | A tab group. All agent Spaces of a profile share one unfocused agent window, so the agent never switches or focuses your tabs and you see every task in one place. Your own tab groups are listed as user Spaces the agent can claim. In a dedicated agent browser (Edge, Opera on its own profile) the existing window is the agent window. |
+| Space sidebar         | Tab group title `🤖 name` (agent working), `✋ name` (you're in control), `✓ name` (done), plus the toolbar popup.                                                                                                                                                                                                                           |
+| Take over / hand back | Popup buttons. Ownership changes are pushed to running agents; a take-over hard-stops the agent with the harness's own user-control message.                                                                                                                                                                                                 |
+| Native snapshot       | `Accessibility.getFullAXTree`, rendered in the native format (`root`, two-space indent, `[ref=<backendNodeId>, loc=...]`); viewport scope uses DOMSnapshot bounds.                                                                                                                                                                           |
+| Profiles              | Every Brave profile. `taskSpace(name, { profileId })` opens the Space in that profile; without one it uses the default (`Default`, or `EGO_BRAVE_PROFILE`). Space ids encode their profile (`Profile 7` owns 700001…).                                                                                                                       |
 
 ## Setup
 
@@ -104,14 +146,15 @@ The first time a profile is used, ego-brave sets it up once:
 
 ## Commands
 
-| Command                                          | Does                                                                              |
-| ------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `ego-brave nodejs <<'EOF' … EOF` / `-e '<code>'` | Run a browser script with the harness API                                         |
-| `ego-brave skill`                                | Print the harness usage guide, with commands rewritten to `ego-brave`             |
-| `ego-brave doctor`                               | Check the harness build, CDP and the extension bridge; set up the default profile |
-| `ego-brave launch [--restart]`                   | Start Brave with remote debugging the macOS way                                   |
+| Command                                                     | Does                                                                                                                                    |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `ego-brave nodejs <<'EOF' … EOF` / `<file>` / `-e '<code>'` | Run a browser script with the harness API                                                                                               |
+| `ego-brave skill`                                           | Print the harness usage guide, with commands rewritten to `ego-brave`                                                                   |
+| `ego-brave doctor`                                          | Check the harness build, policies, CDP and the extension bridge; set up the default profile; reload the extension when its code changed |
+| `ego-brave launch [--restart]`                              | Start Brave with remote debugging the macOS way                                                                                         |
 
-Environment: `EGO_BRAVE_CDP_URL` (default `http://127.0.0.1:9222`),
+Environment: `EGO_BRAVE_CDP_URL` (default `http://127.0.0.1:9222`, 9444 for
+Edge, 9333 for Opera), `EGO_EDGE_EXE`, `EGO_EDGE_APP`, `EGO_EDGE_USER_DATA_DIR`,
 `EGO_BRAVE_SDK_PATH` (harness bundle), `EGO_BRAVE_TRACE=1` (log every CDP
 request, its latency and any request that never got a reply).
 
@@ -121,7 +164,12 @@ request, its latency and any request that never got a reply).
   `iframe [ref=N]` without its inner nodes.
 - `animationHighlightMouseToPosition` is a no-op.
 - Agent Spaces do not survive a browser restart: tab group ids change, so a
-  restored group comes back as a user Space you can claim.
+  restored group comes back as a user Space (relabelled `✋`, or kept `✓`)
+  that an agent can claim by name.
+- Chromium keeps an unpacked extension's service worker cached across
+  restarts and version changes. `doctor` reloads the extension when its code
+  changed (in-place loads, Brave); a staged copy (Edge) is reloaded by
+  `launch` right after staging a changed copy.
 - Spaces claimed from your own tab groups live in your window; new tabs there
   open in the background so your selected tab is left alone.
 
