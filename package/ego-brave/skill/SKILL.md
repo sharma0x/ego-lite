@@ -62,6 +62,13 @@ EOF
 
 - One script per step; one TaskSpace per goal. Resume it by name in later
   rounds (`taskSpace("goal name")`) and reuse `p1` with `goto()`.
+- Never open windows yourself (`window.open`, `chrome.windows`, CDP
+  `Target.createTarget`, new windows from a page): every page belongs to a
+  Space in the shared agent window. For more tabs in the same goal, call
+  `await task.newPage()` (later: `task.page("p2")`).
+  Another goal: another `taskSpace("other name")`, which becomes another tab
+  group in the same window. Each browser profile has its own agent window,
+  so tasks in two profiles show two windows; keep a goal in one profile.
 - Act on refs from the latest snapshot (`@21`) or stable locators
   (`loc=role:button[name="Send"]`).
 - When the goal is done, `await task.finish({ keep: [] })` closes the

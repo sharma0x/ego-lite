@@ -88,6 +88,12 @@ console.log(await page.snapshot());
   same Space: `await task.newPage()`.
 - Act on refs from the latest snapshot (`@21`) or stable locators
   (`loc=role:button[name="Send"]`).
+- Never open windows yourself (`window.open`, `chrome.windows`, CDP
+  `Target.createTarget`, new windows from a page): every page belongs to a
+  Space in the shared agent window. For more tabs in the same goal, call
+  `await task.newPage()` (later: `task.page("p2")`).
+  Another goal: another `taskSpace("other name")`, which becomes another tab
+  group in the same window.
 - When the goal is done: `await task.finish({ keep: [] })` closes the Space's
   tabs; `keep: "all"` leaves them open, marked `✓`, for the user to look at.
 - Apps that stream data (Outlook, Teams and similar) may never fire `load`:
