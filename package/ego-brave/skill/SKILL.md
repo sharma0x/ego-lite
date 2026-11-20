@@ -93,6 +93,16 @@ Developer mode so the ego-brave extension can run there.
 - Ask before anything irreversible or public: sending, posting, buying,
   deleting.
 
+## Opera (`ego-opera`)
+
+Same commands and API, driving Opera instead of Brave: `ego-opera launch`,
+`ego-opera doctor`, `ego-opera nodejs`. Use it only when a task needs Opera,
+mainly its built-in browser VPN (a US IP for one site without changing the
+Mac's network). It runs its own Opera profile (`EGO_OPERA_USER_DATA_DIR`, set
+by the `~/.local/bin/ego-opera` wrapper) on port 9333, and each Space is its
+own window there because Opera keeps no tab groups. Code: branch
+`feat/opera-backend` of the fork below.
+
 ## Troubleshooting
 
 - Slow or timed-out calls: run `EGO_BRAVE_TRACE=1 ego-brave nodejs ...` to log
