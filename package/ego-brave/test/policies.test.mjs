@@ -25,7 +25,11 @@ test("parses reg query output, turning list subkeys into arrays", () => {
 
 test("an unmanaged browser has no blocking policy", () => {
   assert.deepEqual(evaluatePolicies({}), [
-    { ok: true, label: "no blocking enterprise policy", detail: "browser is not managed" },
+    {
+      ok: true,
+      label: "no blocking enterprise policy",
+      detail: "browser is not managed",
+    },
   ]);
 });
 
@@ -47,6 +51,10 @@ test("flags every policy that blocks agents", () => {
 });
 
 test("allowed debugging and extension policies pass", () => {
-  const [finding] = evaluatePolicies({ RemoteDebuggingAllowed: 1, DeveloperToolsAvailability: 1, ExtensionAllowedTypes: ["extension", "theme"] });
+  const [finding] = evaluatePolicies({
+    RemoteDebuggingAllowed: 1,
+    DeveloperToolsAvailability: 1,
+    ExtensionAllowedTypes: ["extension", "theme"],
+  });
   assert.equal(finding.ok, true);
 });
