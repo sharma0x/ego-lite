@@ -2,61 +2,56 @@ const BRIDGE_PATH = "/offscreen.html";
 const POLL_MS = 250;
 
 /**
- * Reloads every running copy of the Agent Spaces extension, so the browser
+ * Reloads the Agent Spaces extension in one profile (browser context), so it
  * runs the files on disk. Chromium keeps an unpacked extension's service
  * worker cached across restarts and even across version changes; only a
- * reload (the Reload button in the extensions page) replaces it.
- *
- * Waits until each reloaded extension has its bridge (offscreen document)
- * back, so the next CLI call finds it.
+ * reload (the Reload button in the extensions page) replaces it. Every
+ * profile runs its own copy, so each one needs its own reload.
  *
  * @param {import("../cdp/cdp-client.mjs").CdpClient} client browser-level
- * @param {{ waitForBridges?: boolean }} options waitForBridges: the browser
- *   just started, so give the extension time to appear first.
- * @returns {Promise<number>} how many extensions were reloaded
+ * @param {string} browserContextId the profile's context
+ * @returns {Promise<{ targetId: string, browserContextId: string }>} the new
+ *   bridge, once the reloaded extension has it back
  */
-export async function reloadExtensions(
+export async function reloadExtensionIn(
   client,
-  { timeoutMs = 15_000, waitForBridges = false } = {},
+  browserContextId,
+  { timeoutMs = 15_000 } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
-  const bridges = waitForBridges
-    ? await waitFor(deadline, () => bridgeTargets(client))
-    : await bridgeTargets(client);
-  if (!bridges) return 0;
-  for (const bridge of bridges) {
-    const worker = await serviceWorkerOf(client, bridge, deadline);
-    if (!worker) throw new Error(`no service worker for ${bridge.base}`);
-    const sessionId = await client.session(worker.targetId);
-    // The worker dies while reloading, so its reply may never come.
-    void client
-      .call(
-        "Runtime.evaluate",
-        { expression: "chrome.runtime.reload()" },
-        sessionId,
-        2000,
-      )
-      .catch(() => {});
-  }
-  const before = new Set(bridges.map((bridge) => bridge.targetId));
-  const back = await waitFor(deadline, async () => {
-    // Between unload and load there is no bridge at all.
-    const now = (await bridgeTargets(client)) ?? [];
-    const fresh = now.filter((bridge) => !before.has(bridge.targetId));
-    return fresh.length >= bridges.length ? fresh : undefined;
-  });
-  if (!back)
+  const [bridge] = await bridgesIn(client, browserContextId);
+  if (!bridge)
+    throw new Error(`no Agent Spaces bridge in context ${browserContextId}`);
+  const worker = await serviceWorkerOf(client, bridge, deadline);
+  if (!worker) throw new Error(`no service worker for ${bridge.base}`);
+  const sessionId = await client.session(worker.targetId);
+  // The worker dies while reloading, so its reply may never come.
+  void client
+    .call(
+      "Runtime.evaluate",
+      { expression: "chrome.runtime.reload()" },
+      sessionId,
+      2000,
+    )
+    .catch(() => {});
+  const fresh = await waitFor(deadline, async () =>
+    (await bridgesIn(client, browserContextId)).find(
+      (candidate) => candidate.targetId !== bridge.targetId,
+    ),
+  );
+  if (!fresh)
     throw new Error(
       "the Agent Spaces extension did not come back after a reload",
     );
-  return bridges.length;
+  return { targetId: fresh.targetId, browserContextId };
 }
 
-async function bridgeTargets(client) {
+async function bridgesIn(client, browserContextId) {
   const { targetInfos } = await client.call("Target.getTargets");
-  const bridges = targetInfos
+  return targetInfos
     .filter(
       (target) =>
+        target.browserContextId === browserContextId &&
         /^(chrome-)?extension:\/\//.test(target.url) &&
         target.url.endsWith(BRIDGE_PATH),
     )
@@ -64,16 +59,20 @@ async function bridgeTargets(client) {
       targetId: target.targetId,
       base: target.url.slice(0, -BRIDGE_PATH.length),
     }));
-  return bridges.length > 0 ? bridges : undefined;
 }
 
-/** The extension's worker target, waking it through its bridge when idle. */
+/** The extension's worker in the same profile, woken through its bridge when idle. */
 async function serviceWorkerOf(client, bridge, deadline) {
   const find = async () => {
     const { targetInfos } = await client.call("Target.getTargets");
+    const bridgeTarget = targetInfos.find(
+      (target) => target.targetId === bridge.targetId,
+    );
     return targetInfos.find(
       (target) =>
-        target.type === "service_worker" && target.url.startsWith(bridge.base),
+        target.type === "service_worker" &&
+        target.url.startsWith(bridge.base) &&
+        target.browserContextId === bridgeTarget?.browserContextId,
     );
   };
   const running = await find();

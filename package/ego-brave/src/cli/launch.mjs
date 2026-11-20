@@ -1,6 +1,5 @@
 import { CdpChannel } from "../cdp/cdp-channel.mjs";
 import { CdpClient } from "../cdp/cdp-client.mjs";
-import { reloadExtensions } from "../extension/extension-reload.mjs";
 import { BROWSER, stageExtension, stagedExtensionIsStale } from "./browser.mjs";
 import { platformFor } from "./platform.mjs";
 
@@ -71,7 +70,8 @@ export async function runLaunch({
     await quit(platform);
     restarted = true;
   }
-  const { updated } = stageExtension(BROWSER);
+  // Profiles reload onto a changed copy on first use (BridgeDirectory).
+  stageExtension(BROWSER);
   await platform.start([
     ...launchFlags(BROWSER, profileDirectory),
     ...(restarted ? ["--restore-last-session"] : []),
@@ -86,24 +86,7 @@ export async function runLaunch({
   output.write(
     `ok   ${APP_NAME} started with remote debugging on port ${DEBUGGING_PORT} (profile ${profileDirectory})\n`,
   );
-  if (updated) {
-    await withClient((client) =>
-      reloadExtensions(client, { waitForBridges: true }),
-    );
-    output.write("ok   Agent Spaces extension updated and reloaded\n");
-  }
   return 0;
-}
-
-async function withClient(use) {
-  const channel = await CdpChannel.connect(
-    `http://127.0.0.1:${DEBUGGING_PORT}`,
-  );
-  try {
-    return await use(new CdpClient(channel));
-  } finally {
-    channel.close();
-  }
 }
 
 /** Closes windows first so the session is saved; then clears leftover background processes. */

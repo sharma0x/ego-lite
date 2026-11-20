@@ -175,22 +175,32 @@ export function stagedExtensionIsStale(
 }
 
 /**
- * A browser that loads the extension straight from the repo (Brave) gets no
- * staged copy, so the CLI remembers which sources it last reloaded there.
- * @returns {{ changed: boolean, record: () => void }}
+ * Which profiles already run the extension code on disk. Every profile runs
+ * its own copy of the extension, and each keeps its cached service worker
+ * until it is reloaded (extension-reload.mjs), so this is tracked per
+ * profile and keyed by a hash of the files the browser loads: changing them
+ * marks every profile stale again. Re-read on each call, since several CLI
+ * processes share the file.
+ *
+ * @returns {{ isCurrent: (profileId: string) => boolean, markCurrent: (profileId: string) => void }}
  */
-export function inPlaceExtensionState(
-  browser = BROWSER,
-  sourceDir = EXTENSION_DIR,
-  dir = stateDir(),
-) {
+export function loadedCodeState(browser = BROWSER, dir = stateDir()) {
   const stateFile = join(dir, `${browser.name}-extension.json`);
-  const hash = hashDirectory(sourceDir);
+  let hash;
+  const currentHash = () => (hash ??= hashDirectory(browser.extensionDir));
+  const profiles = () => {
+    const state = readBuildState(stateFile);
+    return new Set(state.hash === currentHash() ? (state.profiles ?? []) : []);
+  };
   return {
-    changed: readBuildState(stateFile).hash !== hash,
-    record() {
+    isCurrent: (profileId) => profiles().has(profileId),
+    markCurrent(profileId) {
+      const current = profiles().add(profileId);
       mkdirSync(dir, { recursive: true });
-      writeFileSync(stateFile, JSON.stringify({ hash }));
+      writeFileSync(
+        stateFile,
+        JSON.stringify({ hash: currentHash(), profiles: [...current] }),
+      );
     },
   };
 }

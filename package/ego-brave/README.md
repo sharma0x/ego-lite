@@ -146,12 +146,12 @@ The first time a profile is used, ego-brave sets it up once:
 
 ## Commands
 
-| Command                                                     | Does                                                                                                                                    |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `ego-brave nodejs <<'EOF' … EOF` / `<file>` / `-e '<code>'` | Run a browser script with the harness API                                                                                               |
-| `ego-brave skill`                                           | Print the harness usage guide, with commands rewritten to `ego-brave`                                                                   |
-| `ego-brave doctor`                                          | Check the harness build, policies, CDP and the extension bridge; set up the default profile; reload the extension when its code changed |
-| `ego-brave launch [--restart]`                              | Start Brave with remote debugging the macOS way                                                                                         |
+| Command                                                     | Does                                                                                                                                            |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ego-brave nodejs <<'EOF' … EOF` / `<file>` / `-e '<code>'` | Run a browser script with the harness API                                                                                                       |
+| `ego-brave skill`                                           | Print the harness usage guide, with commands rewritten to `ego-brave`                                                                           |
+| `ego-brave doctor`                                          | Check the harness build, policies, CDP and the extension bridge; set up the default profile (reloading the extension there if its code changed) |
+| `ego-brave launch [--restart]`                              | Start Brave with remote debugging the macOS way                                                                                                 |
 
 Environment: `EGO_BRAVE_CDP_URL` (default `http://127.0.0.1:9222`, 9444 for
 Edge, 9333 for Opera), `EGO_EDGE_EXE`, `EGO_EDGE_APP`, `EGO_EDGE_USER_DATA_DIR`,
@@ -167,9 +167,11 @@ request, its latency and any request that never got a reply).
   restored group comes back as a user Space (relabelled `✋`, or kept `✓`)
   that an agent can claim by name.
 - Chromium keeps an unpacked extension's service worker cached across
-  restarts and version changes. `doctor` reloads the extension when its code
-  changed (in-place loads, Brave); a staged copy (Edge) is reloaded by
-  `launch` right after staging a changed copy.
+  restarts and version changes, separately in every profile. The CLI reloads
+  a profile's copy the first time it uses that profile after the extension
+  code changed (tracked per profile in `~/.cache/ego-brave`), so no profile
+  keeps running old code. A staged copy (Edge) changes only on
+  `launch --restart`.
 - Spaces claimed from your own tab groups live in your window; new tabs there
   open in the background so your selected tab is left alone.
 

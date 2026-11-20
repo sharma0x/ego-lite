@@ -59,13 +59,20 @@ export class ProfileOpener {
 
     const pagesBefore = await this.#pageTargetIds();
     const browserContextId = await this.#switchTo(profileId);
-    const rpc = await this.#bridgeIn(browserContextId, profileId);
-    await rpc.call("setProfile", {
+    const { rpc: bridge, installed } = await this.#bridgeIn(
+      browserContextId,
+      profileId,
+    );
+    await bridge.call("setProfile", {
       id: profileId,
       name: this.#catalog.resolve(profileId).name,
       idBase: this.#catalog.idBaseOf(profileId),
     });
-    this.#directory.register(profileId, rpc);
+    // The tag is in the extension's storage, so it survives a reload here.
+    const rpc = await this.#directory.register(profileId, bridge, {
+      browserContextId,
+      installed,
+    });
     return {
       rpc,
       cleanup: () => this.#closeBlankTabs(pagesBefore, browserContextId),
@@ -103,10 +110,14 @@ export class ProfileOpener {
     return { profileId: basename(value), browserContextId };
   }
 
-  /** Extensions.loadUnpacked installs into the active profile, which is now this one. */
+  /**
+   * Extensions.loadUnpacked installs into the active profile, which is now
+   * this one. @returns {{ rpc, installed: boolean }} installed: it was just
+   * loaded, so it runs the current code.
+   */
   async #bridgeIn(browserContextId, profileId) {
     const running = await this.#directory.inContext(browserContextId);
-    if (running) return running;
+    if (running) return { rpc: running, installed: false };
     const { id } = await this.#client.call("Extensions.loadUnpacked", {
       path: BROWSER.extensionDir,
     });
@@ -114,7 +125,7 @@ export class ProfileOpener {
     for (let attempt = 0; attempt < BRIDGE_ATTEMPTS; attempt += 1) {
       await sleep(BRIDGE_DELAY_MS);
       const loaded = await this.#directory.inContext(browserContextId);
-      if (loaded) return loaded;
+      if (loaded) return { rpc: loaded, installed: true };
     }
     throw bridgeMissing(` "${profileId}"`);
   }

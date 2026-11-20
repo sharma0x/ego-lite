@@ -2,13 +2,7 @@ import { CdpChannel } from "../cdp/cdp-channel.mjs";
 import { CdpClient } from "../cdp/cdp-client.mjs";
 import { BridgeDirectory } from "../profiles/bridge-directory.mjs";
 import { ProfileCatalog } from "../profiles/profile-catalog.mjs";
-import { reloadExtensions } from "../extension/extension-reload.mjs";
-import {
-  BROWSER,
-  EXTENSION_DIR,
-  inPlaceExtensionState,
-  stagedExtensionIsStale,
-} from "./browser.mjs";
+import { BROWSER, stagedExtensionIsStale } from "./browser.mjs";
 import { assertHarnessBuilt } from "./harness.mjs";
 import { checkPolicies } from "./policies.mjs";
 import { browserProcessIdOf, createProfileRouter } from "./session.mjs";
@@ -42,14 +36,9 @@ export async function runDoctor(output = process.stdout) {
     const profiles = ProfileCatalog.load();
     const defaultProfile = profiles.resolve(undefined);
     const browserProcessId = await browserProcessIdOf(client);
-    const newRouter = () =>
-      createProfileRouter({ client, profiles, browserProcessId });
-    // Setting up the profile first guarantees the extension is running, so
-    // a reload (which replaces its bridge) is never skipped or raced.
-    await newRouter().ensureProfile(defaultProfile.id);
-    const extensionCurrent = await refreshExtension(client, report);
-    const router = newRouter();
+    const router = createProfileRouter({ client, profiles, browserProcessId });
     await router.ensureProfile(defaultProfile.id);
+    const extensionCurrent = reportStagedExtension(report);
     const { taskSpaces } = await router.call("listSpaces");
     report(
       true,
@@ -67,28 +56,19 @@ export async function runDoctor(output = process.stdout) {
 }
 
 /**
- * Makes the browser run the extension code on disk: Chromium keeps a cached
- * service worker until the extension is reloaded. A staged copy (Edge) is
- * only replaced by a restart; an in-place one (Brave) is reloaded here.
- * @returns {Promise<boolean>} false when a restart is still needed
+ * A staged copy (Edge) is refreshed only when the browser starts; profiles
+ * then reload onto it on first use (BridgeDirectory). In-place copies need
+ * nothing here.
+ * @returns {boolean} false when a restart is still needed
  */
-async function refreshExtension(client, report) {
-  if (BROWSER.extensionDir !== EXTENSION_DIR) {
-    if (!stagedExtensionIsStale(BROWSER)) return true;
-    report(
-      false,
-      "Agent Spaces extension is out of date",
-      `run \`${BROWSER.command} launch --restart\` to load the new version (tabs are restored)`,
-    );
-    return false;
-  }
-  const state = inPlaceExtensionState(BROWSER);
-  if (!state.changed) return true;
-  const reloaded = await reloadExtensions(client);
-  state.record();
-  if (reloaded > 0)
-    report(true, "Agent Spaces extension reloaded with the latest code");
-  return true;
+function reportStagedExtension(report) {
+  if (!stagedExtensionIsStale(BROWSER)) return true;
+  report(
+    false,
+    "Agent Spaces extension is out of date",
+    `run \`${BROWSER.command} launch --restart\` to load the new version (tabs are restored)`,
+  );
+  return false;
 }
 
 /** @returns {Promise<boolean>} true when a policy blocks agents */
