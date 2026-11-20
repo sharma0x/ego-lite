@@ -18,6 +18,52 @@ All agent work happens in **one agent window**. Each task is a coloured tab
 group titled `🤖 name` while the agent works, `✋ name` when you are in
 control and `✓ name` when it is done.
 
+## Quick start: let OpenCode set it up
+
+Install Node.js 22+ and Git first (section 1), start OpenCode, and paste this
+prompt. OpenCode clones the repo, runs the installer, checks the result and
+stops if your company blocks something. The same text is in
+[`opencode-setup-prompt.txt`](opencode-setup-prompt.txt).
+
+```text
+Set up browser automation for yourself on this Windows laptop, so you can drive Microsoft Edge the way the user's personal setup drives Brave. Everything you need is in a public GitHub repo; follow it rather than improvising.
+
+Repo: https://github.com/sharma0x/ego-lite (branch feat/edge-backend)
+Guide: package/ego-brave/setup/windows/README.md (read it fully first)
+Installer: package/ego-brave/setup/windows/install.ps1
+
+Steps:
+1. Check prerequisites: `node --version` must be 22 or newer, and `git --version` must work. If either is missing, stop and tell me exactly what to install. Do not install system software yourself.
+2. Clone the repo:
+   git clone --branch feat/edge-backend https://github.com/sharma0x/ego-lite.git $env:USERPROFILE\ego-lite
+   If it already exists, run `git -C $env:USERPROFILE\ego-lite pull` instead.
+3. Run the installer from PowerShell:
+   powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\ego-lite\package\ego-brave\setup\windows\install.ps1
+   It builds the harness, installs the `ego-edge` command and chrome-devtools-mcp, links the `ego-edge` skill into ~/.config/opencode/skills, adds the `edge-devtools` MCP server to opencode.json, starts the agent Edge and runs `ego-edge doctor`.
+4. Read the output. Every step should print `ok`. If something fails, use the troubleshooting table in the guide. In particular:
+   - If `doctor` prints `FAIL policy: ...`, the company's IT blocks remote debugging or unpacked extensions. Stop and tell me which policy. Never try to get around an IT policy.
+   - If PowerShell says running scripts is disabled, use `ego-edge.cmd` in place of `ego-edge`.
+   - If npm or git fail with network errors, ask me for the company proxy or npm registry. Do not guess one.
+   - If opencode.json has comments or is a .jsonc file, the installer prints a snippet instead of editing it. Add that `edge-devtools` entry yourself, keeping the existing comments.
+5. When `ego-edge doctor` is all `ok`, tell me to:
+   a) sign in to my work accounts once in the agent Edge window that opened (it is separate from my normal Edge),
+   b) restart OpenCode so it loads the ego-edge skill and the edge-devtools MCP server.
+
+Rules:
+- No administrator rights, no permanent execution-policy changes, no changes to my everyday Edge or its profile.
+- Never type my passwords or MFA codes. When a site needs a login, hand the window to me and wait.
+- Report exactly what happened, including any failure output. Don't summarise a failure as success.
+```
+
+When it is done, sign in once in the agent Edge window, restart OpenCode and
+test it with:
+
+```text
+Use the ego-edge skill: open example.com and tell me the page heading.
+```
+
+To set it up by hand instead, follow sections 1 to 3.
+
 ## 1. Prerequisites
 
 Install these first. None need administrator rights if your company's

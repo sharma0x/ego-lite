@@ -53,7 +53,8 @@ ego-edge nodejs task.mjs
   there once.
 
 Windows onboarding with OpenCode (installer, skill, `edge-devtools` MCP
-server): [`setup/windows/README.md`](setup/windows/README.md). The OpenCode
+server): [`setup/windows/README.md`](setup/windows/README.md), which starts
+with a prompt to paste into OpenCode so it sets everything up. The OpenCode
 skill is [`skills/ego-edge/SKILL.md`](skills/ego-edge/SKILL.md).
 
 ## Opera
