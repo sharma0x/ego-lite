@@ -19,6 +19,16 @@ const agentSpace = (id, fields = {}) => ({
 test("idle limits depend on who holds the Space", () => {
   assert.equal(idleLimit(agentSpace(1)), IDLE_LIMITS_MS.working);
   assert.equal(
+    idleLimit(
+      agentSpace(1, {
+        status: "completed",
+        ownership: "user",
+        closeWhenIdle: true,
+      }),
+    ),
+    IDLE_LIMITS_MS.finished,
+  );
+  assert.equal(
     idleLimit(agentSpace(1, { status: "completed", ownership: "user" })),
     IDLE_LIMITS_MS.done,
   );

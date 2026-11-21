@@ -8,7 +8,8 @@ const STORAGE_KEY = "egoBrave";
  * Space fields: id, name, createdBy ('agent'|'user'), ownership ('agent'|'user'),
  * reason, status ('active'|'completed'), state, groupId (tab group) or
  * tabIds (tab-set Space, see space-container.js), inAgentWindow, managed,
- * activeTargetId. `agentWindowId` is the window all agent Spaces share.
+ * activeTargetId, closeWhenIdle (finished by the agent, closes once idle;
+ * see space-janitor.js). `agentWindowId` is the window all agent Spaces share.
  *
  * The extension runs once per browser profile. `profile` ({ id, name, idBase })
  * is assigned by the CLI, which alone knows which profile this instance is

@@ -72,13 +72,13 @@ EOF
 - Act on refs from the latest snapshot (`@21`) or stable locators
   (`loc=role:button[name="Send"]`).
 - Finish every goal before your final answer, also when it failed or you
-  stop early: `await task.finish({ keep: [] })` closes the Space's tabs. Use
-  `keep: "all"` (leaves them open, marked `✓`) only when the user has to look
-  at the page itself. Spaces left behind are closed automatically: `🤖` after
-  30 minutes without agent activity, `✓` after 1 hour, `✋` after 8 hours
-  (selecting a tab or a page loading resets the clock). If a Space you were
-  using is gone ("Task space not found"), start a new one with
-  `taskSpace(name)`.
+  stop early: `await task.finish({ keep: [] })` marks the Space done (`✓`) and
+  its tabs close after 10 idle minutes, so the user can still glance at the
+  result. Use `keep: "all"` only when the user has to look at the page itself
+  (it stays up to 1 hour). If you forget, an idle `🤖` Space closes after 30
+  minutes and a `✋` one after 8 hours (a page loading or the user selecting a
+  tab resets the clock). If a Space you were using is gone ("task space not
+  found"), start a new one with `taskSpace(name)`.
 - Apps that stream data (Gmail and similar) may never fire `load`: when
   `goto()` times out with "navigation committed", continue on the page
   instead of retrying.

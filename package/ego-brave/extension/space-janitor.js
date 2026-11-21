@@ -8,9 +8,11 @@ const MINUTE = 60_000;
  * Space, a page loading in it, or the user selecting one of its tabs.
  */
 export const IDLE_LIMITS_MS = {
+  /** ✓ finished by the agent: left up briefly so the user sees the result. */
+  finished: 10 * MINUTE,
   /** 🤖 the agent is working, or forgot to finish. */
   working: 30 * MINUTE,
-  /** ✓ done and kept for the user to look at. */
+  /** ✓ done and kept for the user to look at (finish with keep). */
   done: 60 * MINUTE,
   /** ✋ waiting for the user (a sign-in, a restored Space). */
   user: 8 * 60 * MINUTE,
@@ -23,6 +25,7 @@ export const IDLE_LIMITS_MS = {
  */
 export function idleLimit(space) {
   if (space.createdBy !== "agent" || !space.managed) return null;
+  if (space.closeWhenIdle) return IDLE_LIMITS_MS.finished;
   if (space.status === "completed") return IDLE_LIMITS_MS.done;
   if (space.ownership === "agent") return IDLE_LIMITS_MS.working;
   return IDLE_LIMITS_MS.user;

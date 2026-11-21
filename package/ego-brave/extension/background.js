@@ -66,7 +66,6 @@ chrome.tabGroups.onRemoved.addListener((group) => {
 
 // Any call on a Space keeps it open; see space-janitor.js for the limits.
 function recordActivity(op, args, value) {
-  if (op === "closeSpace") return;
   const spaceId = op === "createSpace" ? value?.id : args?.spaceId;
   if (Number.isInteger(spaceId)) return janitor.touch(spaceId).catch(() => {});
 }

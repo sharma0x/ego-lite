@@ -104,6 +104,7 @@ export class SpaceRegistry {
       reason: undefined,
       status: "active",
       managed: true,
+      closeWhenIdle: undefined,
     };
     return descriptor(
       await this.#store.update(spaceId, name ? { ...patch, name } : patch),
@@ -119,7 +120,23 @@ export class SpaceRegistry {
     };
   }
 
-  async close({ spaceId }) {
+  /**
+   * `linger` (an agent finishing): mark the Space done and leave its tabs up
+   * for the user to see; space-janitor.js closes them once idle. Without it
+   * (Stop in the popup) the tabs close now.
+   */
+  async close({ spaceId, linger = false }) {
+    if (linger)
+      return this.#transition(
+        spaceId,
+        {
+          ownership: "user",
+          reason: undefined,
+          status: "completed",
+          closeWhenIdle: true,
+        },
+        "task space finished; its tabs close after 10 idle minutes.",
+      );
     const resolved = await this.resolve(spaceId);
     if (resolved.error_code) return resolved;
     await closeContainer(resolved.space);
@@ -146,7 +163,12 @@ export class SpaceRegistry {
   takeOver({ spaceId }) {
     return this.#transition(
       spaceId,
-      { ownership: "agent", reason: undefined, status: "active" },
+      {
+        ownership: "agent",
+        reason: undefined,
+        status: "active",
+        closeWhenIdle: undefined,
+      },
       "has been taken over by the agent.",
     );
   }

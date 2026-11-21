@@ -77,8 +77,12 @@ export class BraveEgo {
       listTaskSpaces: (...args) => this.#listTaskSpaces(args),
       createTaskSpace: (...args) => this.#createTaskSpace(args),
       claimTaskSpace: (...args) => this.#claimTaskSpace(args),
+      // An agent's finish leaves the tabs up for a while (closed later by
+      // the extension); the popup's Stop closes them at once.
       closeTaskSpace: (...args) =>
-        this.#lifecycle("closeTaskSpace", "closeSpace", args),
+        this.#lifecycle("closeTaskSpace", "closeSpace", args, {
+          linger: true,
+        }),
       completeTaskSpace: (...args) =>
         this.#lifecycle("completeTaskSpace", "completeSpace", args),
       handOffTaskSpace: (...args) =>
@@ -169,9 +173,11 @@ export class BraveEgo {
     return result;
   }
 
-  async #lifecycle(method, operation, args) {
+  async #lifecycle(method, operation, args, options) {
     expectArity(method, args, 0);
-    const result = await this.#asAgent(() => this.#spaceCall(operation));
+    const result = await this.#asAgent(() =>
+      this.#spaceCall(operation, options),
+    );
     this.#control.invalidate();
     return result;
   }
