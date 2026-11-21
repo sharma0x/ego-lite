@@ -1,4 +1,4 @@
-import { addTab, holdsTab, tabsOf } from "./space-container.js";
+import { addTab, holdsTab, mayTakeFront, tabsOf } from "./space-container.js";
 import { errorResult } from "./space-registry.js";
 import {
   tabIdForTarget,
@@ -8,8 +8,9 @@ import {
 
 /**
  * The tabs inside one Space. "Active" is tracked per Space: in the agent
- * window the tab is also selected, but focus never moves, and in a claimed
- * user group the user's selected tab is left alone.
+ * window the tab is also selected when that takes the front from no other
+ * Space (mayTakeFront), focus never moves, and in a claimed user group the
+ * user's selected tab is left alone.
  */
 export class SpaceTabs {
   #registry;
@@ -33,7 +34,9 @@ export class SpaceTabs {
     const tab = await chrome.tabs.create({
       windowId: group.windowId,
       url,
-      active: Boolean(space.inAgentWindow),
+      active:
+        Boolean(space.inAgentWindow) &&
+        (await mayTakeFront(this.#store, group.windowId, spaceId)),
     });
     const patch = await addTab(space, tab.id);
     if (patch) await this.#store.update(spaceId, patch);
@@ -67,7 +70,10 @@ export class SpaceTabs {
         `Target ${targetId} is not in task space ${spaceId}`,
       );
     }
-    if (resolved.space.inAgentWindow)
+    if (
+      resolved.space.inAgentWindow &&
+      (await mayTakeFront(this.#store, tab.windowId, spaceId))
+    )
       await chrome.tabs.update(tabId, { active: true });
     await this.#store.update(spaceId, { activeTargetId: targetId });
     return {};

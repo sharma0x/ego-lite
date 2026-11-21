@@ -1,12 +1,20 @@
 import { ErrorCode, isErrorResult } from "../errors.mjs";
 
 const USER_CONTROL_MESSAGE = "The task is under user control";
+// Ids for the bridge's own commands, far above the harness's counter, so
+// their replies can be told apart and kept from the harness.
+const OWN_ID_BASE = 2 ** 30;
 
 /**
  * Passes the harness's raw CDP traffic to the browser in send order, applying
  * the native rules: no traffic without a selected agent-owned Space, failures
  * reported through onSendCDPMessageError, and Target.activateTarget handled
  * by the extension so the agent never raises a window over the user's work.
+ *
+ * Agents share one window, so most of their tabs are in the background.
+ * Every page the harness attaches to gets focus emulation: it then reports
+ * itself visible and focused, so animation frames, lazy loading and focus
+ * handlers keep working there, as in the selected tab.
  */
 export class HarnessCdpBridge {
   #channel;
@@ -14,6 +22,7 @@ export class HarnessCdpBridge {
   #activateTarget;
   #callbacks;
   #outbox = Promise.resolve();
+  #nextOwnId = OWN_ID_BASE;
 
   /**
    * @param {object} deps
@@ -66,8 +75,27 @@ export class HarnessCdpBridge {
   }
 
   #deliver(rawMessage) {
+    const message = JSON.parse(rawMessage);
+    if (message.id >= OWN_ID_BASE) return;
+    if (
+      message.method === "Target.attachedToTarget" &&
+      message.params?.targetInfo?.type === "page"
+    )
+      this.#emulateFocus(message.params.sessionId);
     const callback = this.#callbacks.onCDPMessage;
     if (typeof callback === "function") callback(rawMessage);
+  }
+
+  #emulateFocus(sessionId) {
+    this.#nextOwnId += 1;
+    this.#channel.send(
+      JSON.stringify({
+        id: this.#nextOwnId,
+        method: "Emulation.setFocusEmulationEnabled",
+        params: { enabled: true },
+        sessionId,
+      }),
+    );
   }
 
   #fail(message, errorCode) {

@@ -55,9 +55,15 @@ export class SpaceRegistry {
     const profileFields = profile
       ? { profileId: profile.id, profileName: profile.name }
       : {};
+    // A Space the agent finished is only waiting to close (space-janitor.js),
+    // so agents do not see it: a new task under the same name gets a fresh
+    // Space instead of being told the name belongs to the user. The popup
+    // still shows it.
     return {
       taskSpaces: await Promise.all(
-        spaces.map((space) => describeForListing(space, profileFields)),
+        spaces
+          .filter((space) => !space.closeWhenIdle)
+          .map((space) => describeForListing(space, profileFields)),
       ),
     };
   }

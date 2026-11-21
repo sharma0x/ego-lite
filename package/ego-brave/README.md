@@ -173,6 +173,12 @@ request, its latency and any request that never got a reply).
   code changed (tracked per profile in `~/.cache/ego-brave`), so no profile
   keeps running old code. A staged copy (Edge) changes only on
   `launch --restart`.
+- Agents share the window without taking turns at the front: a Space
+  selects its tab only when the front tab is idle, its own or finished, so
+  agents never switch tabs away from each other or from a Space you control.
+  Pages agents drive get CDP focus emulation (`harness-cdp-bridge.mjs`), so
+  a background tab reports itself visible and focused and behaves like the
+  selected one.
 - Agent Spaces close on their own (`extension/space-janitor.js`). An agent's
   `finish()` marks the Space `✓` and its tabs close after 10 idle minutes, so
   you can still see the result; Stop in the popup closes at once. Spaces an

@@ -48,7 +48,7 @@ export async function openAgentTab(store, { dedicatedBrowser = false } = {}) {
     const tab = await chrome.tabs.create({
       windowId: window.id,
       url: "about:blank",
-      active: true,
+      active: await mayTakeFront(store, window.id),
     });
     return { windowId: window.id, tabId: tab.id };
   }
@@ -58,6 +58,20 @@ export async function openAgentTab(store, { dedicatedBrowser = false } = {}) {
   });
   await store.setAgentWindowId(created.id);
   return { windowId: created.id, tabId: created.tabs[0].id };
+}
+
+/**
+ * Whether a Space may select one of its tabs in this window. Agents share
+ * the window, so a Space brings its tab forward only when the front tab is
+ * idle (in no Space), its own, or in a finished Space; otherwise it works in
+ * a background tab and agents never take the front from each other or from
+ * a Space the user controls.
+ */
+export async function mayTakeFront(store, windowId, spaceId) {
+  const [front] = await chrome.tabs.query({ windowId, active: true });
+  if (!front) return true;
+  const holder = (await store.all()).find((space) => holdsTab(space, front));
+  return !holder || holder.id === spaceId || holder.status === "completed";
 }
 
 async function storedAgentWindow(store) {
