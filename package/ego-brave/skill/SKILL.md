@@ -71,8 +71,14 @@ EOF
   so tasks in two profiles show two windows; keep a goal in one profile.
 - Act on refs from the latest snapshot (`@21`) or stable locators
   (`loc=role:button[name="Send"]`).
-- When the goal is done, `await task.finish({ keep: [] })` closes the
-  Space's tabs; use `keep: "all"` when the user should see the result.
+- Finish every goal before your final answer, also when it failed or you
+  stop early: `await task.finish({ keep: [] })` closes the Space's tabs. Use
+  `keep: "all"` (leaves them open, marked `✓`) only when the user has to look
+  at the page itself. Spaces left behind are closed automatically: `🤖` after
+  30 minutes without agent activity, `✓` after 1 hour, `✋` after 8 hours
+  (selecting a tab or a page loading resets the clock). If a Space you were
+  using is gone ("Task space not found"), start a new one with
+  `taskSpace(name)`.
 - Apps that stream data (Gmail and similar) may never fire `load`: when
   `goto()` times out with "navigation committed", continue on the page
   instead of retrying.

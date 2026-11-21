@@ -94,8 +94,14 @@ console.log(await page.snapshot());
   `await task.newPage()` (later: `task.page("p2")`).
   Another goal: another `taskSpace("other name")`, which becomes another tab
   group in the same window.
-- When the goal is done: `await task.finish({ keep: [] })` closes the Space's
-  tabs; `keep: "all"` leaves them open, marked `✓`, for the user to look at.
+- Finish every goal before your final answer, also when it failed or you
+  stop early: `await task.finish({ keep: [] })` closes the Space's tabs. Use
+  `keep: "all"` (leaves them open, marked `✓`) only when the user has to look
+  at the page itself. Spaces left behind are closed automatically: `🤖` after
+  30 minutes without agent activity, `✓` after 1 hour, `✋` after 8 hours
+  (selecting a tab or a page loading resets the clock). If a Space you were
+  using is gone ("Task space not found"), start a new one with
+  `taskSpace(name)`.
 - Apps that stream data (Outlook, Teams and similar) may never fire `load`:
   when `goto()` times out with "navigation committed", continue on the page
   instead of retrying.

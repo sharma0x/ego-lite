@@ -1,3 +1,4 @@
+import { SpaceJanitor } from "./space-janitor.js";
 import { SpaceRegistry } from "./space-registry.js";
 import { SpaceStore } from "./space-store.js";
 import { SpaceTabs } from "./space-tabs.js";
@@ -9,6 +10,8 @@ const EVENT_CHANNEL = "ego-brave-event";
 const store = new SpaceStore();
 const registry = new SpaceRegistry(store);
 const tabs = new SpaceTabs(registry, store);
+const janitor = new SpaceJanitor(registry, store);
+const SWEEP_ALARM = "close-idle-spaces";
 
 // The allowlist of operations reachable from the CLI bridge and the popup.
 const OPERATIONS = {
@@ -40,7 +43,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   Promise.resolve()
     .then(() => operation(message.args ?? {}))
     .then(
-      (value) => sendResponse({ ok: true, value }),
+      (value) => {
+        sendResponse({ ok: true, value });
+        void recordActivity(message.op, message.args, value);
+      },
       (error) =>
         sendResponse({ ok: false, message: error?.message ?? String(error) }),
     );
@@ -56,6 +62,34 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.tabGroups.onRemoved.addListener((group) => {
   void store.removeWhere((space) => space.groupId === group.id);
+});
+
+// Any call on a Space keeps it open; see space-janitor.js for the limits.
+function recordActivity(op, args, value) {
+  if (op === "closeSpace") return;
+  const spaceId = op === "createSpace" ? value?.id : args?.spaceId;
+  if (Number.isInteger(spaceId)) return janitor.touch(spaceId).catch(() => {});
+}
+
+// Pages loading (the agent navigating) and the user selecting a tab count
+// as activity too.
+chrome.tabs.onUpdated.addListener((tabId, change) => {
+  if (change.status === "complete")
+    void janitor.touchTab(tabId).catch(() => {});
+});
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  void janitor.touchTab(tabId).catch(() => {});
+});
+
+// Closes Spaces an agent forgot to finish. Created only when missing:
+// re-creating it on every worker start would keep pushing the first run back.
+async function scheduleSweep() {
+  if (!(await chrome.alarms.get(SWEEP_ALARM)))
+    await chrome.alarms.create(SWEEP_ALARM, { periodInMinutes: 1 });
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === SWEEP_ALARM) void janitor.sweep().catch(() => {});
 });
 
 // Tab-set Spaces (browsers without working tab groups) end with their last tab.
@@ -117,3 +151,4 @@ async function adoptRestoredSpaces() {
 void adoptRestoredSpaces();
 chrome.runtime.onInstalled.addListener(ensureBridge);
 void ensureBridge();
+void scheduleSweep();

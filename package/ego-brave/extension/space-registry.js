@@ -41,7 +41,8 @@ export class SpaceRegistry {
       await this.#store.removeWhere((candidate) => candidate.id === spaceId);
     return errorResult(
       "EGO_TASK_SPACE_NOT_FOUND",
-      `Task space not found: ${spaceId}`,
+      `Task space not found: ${spaceId}. It was closed, by the user or ` +
+        "automatically after being idle; start a new one with taskSpace(name).",
     );
   }
 

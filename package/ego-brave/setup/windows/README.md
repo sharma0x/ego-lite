@@ -126,6 +126,9 @@ It installs into:
 - The **Agent Spaces** toolbar button in the agent Edge lists the agent's
   tasks: **Take over** stops the agent on that task, **Hand back** lets it
   continue, **Show** brings the task forward, **Stop** closes it.
+- Agents close their tab groups when they finish. Any they leave behind close
+  on their own: `🤖` after 30 minutes without activity, `✓` after 1 hour, `✋`
+  after 8 hours. The group you are looking at never closes.
 - If the agent Edge is closed, the agent reopens it with `ego-edge launch`.
 - Commands, if you want them yourself:
 

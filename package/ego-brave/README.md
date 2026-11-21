@@ -173,6 +173,11 @@ request, its latency and any request that never got a reply).
   code changed (tracked per profile in `~/.cache/ego-brave`), so no profile
   keeps running old code. A staged copy (Edge) changes only on
   `launch --restart`.
+- Agent Spaces left open are closed automatically (`extension/space-janitor.js`):
+  `🤖` after 30 minutes without agent activity, `✓` after 1 hour, `✋` after 8
+  hours. Agent calls, pages loading and the user selecting a tab count as
+  activity, and the Space you are looking at is never closed. Your own tab
+  groups, also ones an agent claimed, are never closed.
 - Spaces claimed from your own tab groups live in your window; new tabs there
   open in the background so your selected tab is left alone.
 
